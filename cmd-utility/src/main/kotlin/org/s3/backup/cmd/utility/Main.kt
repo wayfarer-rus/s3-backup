@@ -37,6 +37,9 @@ private fun validBucketName(bucketName: String): Boolean {
     return S3BucketValidator.isValidName(bucketName)
 }
 
-private fun validDirectory(dir: String): Boolean = File(dir).isDirectory
+private fun validDirectory(dirName: String): Boolean {
+    val dir = File(dirName)
+    return dir.isDirectory && dir.canRead()
+}
 
 private fun printHelp() = println(Messages.helpText)
