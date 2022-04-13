@@ -1,13 +1,11 @@
 plugins {
-    kotlin("jvm") version "1.6.10"
-}
-
-version = "unspecified"
-
-repositories {
-    mavenCentral()
+    kotlin("jvm")
+    `java-library`
 }
 
 dependencies {
+    implementation(platform("software.amazon.awssdk:bom:2.17.169"))
+    implementation("software.amazon.awssdk:s3")
+
     implementation(kotlin("stdlib"))
 }

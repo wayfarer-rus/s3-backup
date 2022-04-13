@@ -1,8 +1,8 @@
 plugins {
-    kotlin("jvm") version "1.6.10"
+    kotlin("jvm")
 }
 
-version = "unspecified"
+version = "0.1.0"
 
 repositories {
     mavenCentral()
@@ -11,4 +11,7 @@ repositories {
 dependencies {
     implementation(project(":s3-backup-library"))
     implementation(kotlin("stdlib"))
+
+    testImplementation("org.junit.jupiter:junit-jupiter:5.8.2")
+    testImplementation("com.github.stefanbirkner:system-lambda:1.2.1")
 }
