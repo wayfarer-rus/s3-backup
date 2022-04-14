@@ -17,17 +17,39 @@ object Messages {
         will backup directory content to given s3 bucket_name
         requires s3 key to be present in the environment
         
-        usage: s3-backup directory bucket_name
+        usage: s3-backup [--dry-run] directory bucket_name
+        
+        --dry-run:  will not upload any data, just print delta
     """.trimIndent()
 }
 
+// why there is no command line library used?
+// because our inputs are very simple and using additional library at this stage is an overkill
 fun main(args: Array<String>) {
-    if (args.size == 2) {
-        if (!validDirectory(args[0])) {
-            println(Messages.directoryErrorText.format(args[0]))
-        } else if (!validBucketName(args[1])) {
-            println(Messages.bucketNameErrorText.format(args[1]))
+    val validateMainParams = { offset: Int ->
+        if (!validDirectory(args[offset])) {
+            println(Messages.directoryErrorText.format(args[offset]))
+            false
+        } else if (!validBucketName(args[offset + 1])) {
+            println(Messages.bucketNameErrorText.format(args[offset + 1]))
+            false
+        } else {
+            true
         }
+    }
+
+    val dryRunCase = {
+        args.size == 3 && args[0] == "--dry-run" && validateMainParams(1)
+    }
+
+    val regularCase = {
+        args.size == 2 && validateMainParams(0)
+    }
+
+    if (dryRunCase()) {
+        S3BackupUtility.doBackup(File(args[1]), args[2], dryRun = true)
+    } else if (regularCase()) {
+        S3BackupUtility.doBackup(File(args[1]), args[2])
     } else {
         printHelp()
     }
