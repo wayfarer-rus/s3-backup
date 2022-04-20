@@ -10,6 +10,7 @@ import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
 import software.amazon.awssdk.services.s3.model.PutObjectRequest
+import software.amazon.awssdk.transfer.s3.FileUpload
 import software.amazon.awssdk.transfer.s3.S3TransferManager
 import software.amazon.awssdk.transfer.s3.UploadFileRequest
 import java.io.File
@@ -140,16 +141,7 @@ object S3BackupUtility {
 
     private fun uploadToCloud(bucketName: String, metadataFile: File, zipFileName: File) {
         println("and upload to S3...")
-//        val s3 = S3Client.builder().build()
-//
-//        val objectRequest = PutObjectRequest.builder()
-//            .bucket(bucketName)
-//            .key(metadataFile.name)
-//            .build()
-//
-//        s3.putObject(objectRequest, metadataFile.toPath())
-
-        val uploadFileRequest: (File, String) -> (UploadFileRequest.Builder) -> Unit = { file: File, bucket: String ->
+        val uploadFileRequest: (File, String) -> (UploadFileRequest.Builder) -> Unit = { file, bucket ->
             { b: UploadFileRequest.Builder ->
                 b.source(file)
                     .putObjectRequest(
@@ -164,6 +156,8 @@ object S3BackupUtility {
         val metadataUpload = transferManager.uploadFile(uploadFileRequest(metadataFile, bucketName))
         val zipUpload = transferManager.uploadFile(uploadFileRequest(zipFileName, bucketName))
 
+        metadataUpload.printProgress()
+        zipUpload.printProgress()
         metadataUpload.completionFuture().join()
         zipUpload.completionFuture().join()
     }
@@ -228,6 +222,13 @@ object S3BackupUtility {
     }
 
     fun getTempDir(): String = System.getProperty("java.io.tmpdir") ?: ""
+}
+
+private fun FileUpload.printProgress() {
+    while (!this.completionFuture().isDone) {
+        this.progress().snapshot().ratioTransferred().ifPresent(System.out::println)
+        Thread.sleep(1000)
+    }
 }
 
 fun sha256(file: File): ByteArray = file.inputStream().use { fis ->
