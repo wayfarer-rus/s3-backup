@@ -1,11 +1,16 @@
 plugins {
     kotlin("jvm")
+    application
 }
 
 version = "0.1.0"
 
 repositories {
     mavenCentral()
+}
+
+application {
+    mainClass.set("org.s3.backup.cmd.utility.MainKt")
 }
 
 dependencies {
