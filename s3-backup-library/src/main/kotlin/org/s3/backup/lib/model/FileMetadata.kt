@@ -1,4 +1,4 @@
-package org.s3.backup.cmd.utility.model
+package org.s3.backup.lib.model
 
 import java.io.File
 

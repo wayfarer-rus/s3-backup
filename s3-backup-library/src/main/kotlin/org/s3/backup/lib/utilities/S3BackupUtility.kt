@@ -1,14 +1,22 @@
-package org.s3.backup.cmd.utility
+package org.s3.backup.lib.utilities
 
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.s3.backup.cmd.utility.model.DirMetadata
-import org.s3.backup.cmd.utility.model.FileMetadata
-import org.s3.backup.cmd.utility.model.MetadataNode
+import org.s3.backup.lib.model.DirMetadata
+import org.s3.backup.lib.model.FileMetadata
+import org.s3.backup.lib.model.MetadataNode
+import software.amazon.awssdk.services.s3.S3Client
+import software.amazon.awssdk.services.s3.model.GetObjectRequest
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
+import software.amazon.awssdk.services.s3.model.PutObjectRequest
+import software.amazon.awssdk.transfer.s3.S3TransferManager
+import software.amazon.awssdk.transfer.s3.UploadFileRequest
 import java.io.File
 import java.nio.file.Files
 import java.security.MessageDigest
 import java.util.Stack
+import java.util.function.Consumer
 
 object S3BackupUtility {
     // the main idea is that we have to create some kind of metadata
@@ -20,7 +28,6 @@ object S3BackupUtility {
         val metadataFileFullPath = "${getTempDir()}$metadataFileName"
         val zipFileFullPath = "${getTempDir()}$zipFileName"
         // access bucket and download latest metadata file
-        // TODO:
         val latestBackupMetadata: MetadataNode? = downloadLatestMetadata(bucketName)
         // create metadata for selected directory
         val freshMetadata = collectMetadata(directory)
@@ -38,8 +45,6 @@ object S3BackupUtility {
 
             // 4) for new checksums create new zip-file
             zipNewFiles(zipFileFullPath, zipFileName, dryRun, newOrUpdatedFiles)
-            // 5) upload zip file with new metadata file to the cloud
-            // TODO:
         } else {
             // completely new backup
             // compress it to Zip
@@ -53,7 +58,10 @@ object S3BackupUtility {
             File(metadataFileFullPath).also { it.writeText(data) }
         }
 
-        uploadToCloud(File(metadataFileFullPath), File(zipFileFullPath))
+        // 5) upload zip file with new metadata file to the cloud
+        if (!dryRun) {
+            uploadToCloud(bucketName, File(metadataFileFullPath), File(zipFileFullPath))
+        }
     }
 
     private fun updateOldFilesAndFindNewFiles(
@@ -103,13 +111,61 @@ object S3BackupUtility {
         }
     }
 
+    // TODO: take a look at https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/examples-glacier.html
     private fun downloadLatestMetadata(bucketName: String): MetadataNode? {
-        // TODO:
-        return null
+        val s3 = S3Client.builder().build()
+
+        // find latest metadata file
+        val metadataFileNameMatcher = "(\\d+)\\.metadata".toRegex()
+        val listObjects = ListObjectsV2Request
+            .builder()
+            .bucket(bucketName)
+            .build()
+
+        return s3.listObjectsV2Paginator(listObjects)
+            .contents()
+            .filter { metadataFileNameMatcher.matches(it.key()) }
+            .maxByOrNull {
+                metadataFileNameMatcher.find(it.key())?.destructured?.component1()?.toLong() ?: 0
+            }?.key()?.let<String, MetadataNode> { key ->
+                // download latest metadata file
+                val getObjectRequest = GetObjectRequest.builder()
+                    .bucket(bucketName).key(key).build()
+
+                // all bytes should be fine here, while metadata lakely will not be more than 2G
+                val metadataObj = s3.getObject(getObjectRequest).readAllBytes().toString(Charsets.UTF_8)
+                Json.decodeFromString(metadataObj)
+            }
     }
 
-    private fun uploadToCloud(metadataFile: File, zipFileName: File) {
+    private fun uploadToCloud(bucketName: String, metadataFile: File, zipFileName: File) {
         println("and upload to S3...")
+//        val s3 = S3Client.builder().build()
+//
+//        val objectRequest = PutObjectRequest.builder()
+//            .bucket(bucketName)
+//            .key(metadataFile.name)
+//            .build()
+//
+//        s3.putObject(objectRequest, metadataFile.toPath())
+
+        val uploadFileRequest: (File, String) -> (UploadFileRequest.Builder) -> Unit = { file: File, bucket: String ->
+            { b: UploadFileRequest.Builder ->
+                b.source(file)
+                    .putObjectRequest(
+                        Consumer { req: PutObjectRequest.Builder ->
+                            req.bucket(bucket).key(file.name)
+                        }
+                    )
+            }
+        }
+
+        val transferManager = S3TransferManager.create()
+        val metadataUpload = transferManager.uploadFile(uploadFileRequest(metadataFile, bucketName))
+        val zipUpload = transferManager.uploadFile(uploadFileRequest(zipFileName, bucketName))
+
+        metadataUpload.completionFuture().join()
+        zipUpload.completionFuture().join()
     }
 
     // build tree like structure

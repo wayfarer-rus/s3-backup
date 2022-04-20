@@ -1,5 +1,6 @@
 package org.s3.backup.cmd.utility
 
+import org.s3.backup.lib.utilities.S3BackupUtility
 import org.s3.backup.lib.validators.S3BucketValidator
 import java.io.File
 
@@ -39,17 +40,19 @@ fun main(args: Array<String>) {
     }
 
     val dryRunCase = {
-        args.size == 3 && args[0] == "--dry-run" && validateMainParams(1)
+        args.size == 3 && args[0] == "--dry-run"
     }
 
     val regularCase = {
-        args.size == 2 && validateMainParams(0)
+        args.size == 2
     }
 
     if (dryRunCase()) {
-        S3BackupUtility.doBackup(File(args[1]), args[2], dryRun = true)
+        if (validateMainParams(1))
+            S3BackupUtility.doBackup(File(args[1]), args[2], dryRun = true)
     } else if (regularCase()) {
-        S3BackupUtility.doBackup(File(args[1]), args[2])
+        if (validateMainParams(0))
+            S3BackupUtility.doBackup(File(args[0]), args[1])
     } else {
         printHelp()
     }
@@ -59,6 +62,7 @@ private fun validBucketName(bucketName: String): Boolean {
     return S3BucketValidator.isValidName(bucketName)
 }
 
+// fix for ~ https://stackoverflow.com/questions/7163364/how-to-handle-in-file-paths
 private fun validDirectory(dirName: String): Boolean {
     val dir = File(dirName)
     return dir.isDirectory && dir.canRead()

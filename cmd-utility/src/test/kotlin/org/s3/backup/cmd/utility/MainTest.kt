@@ -8,6 +8,7 @@ import io.mockk.slot
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.s3.backup.lib.utilities.S3BackupUtility
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 

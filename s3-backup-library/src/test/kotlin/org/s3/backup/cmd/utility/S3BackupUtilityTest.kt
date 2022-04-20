@@ -9,8 +9,9 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.s3.backup.cmd.utility.model.FileMetadata
-import org.s3.backup.cmd.utility.model.MetadataNode
+import org.s3.backup.lib.model.FileMetadata
+import org.s3.backup.lib.model.MetadataNode
+import org.s3.backup.lib.utilities.S3BackupUtility
 import java.io.File
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -21,8 +22,8 @@ internal class S3BackupUtilityTest {
 
     @Test
     fun `test delta comparator`() {
-        val origDir = getResourcePath("test-origin/dir1")!!
-        val freshDir = getResourcePath("test-compare/dir1")!!
+        val origDir = getResourcePath("test-origin/test")!!
+        val freshDir = getResourcePath("test-compare/test")!!
         val origMetadata = S3BackupUtility.collectMetadata(File(origDir))
         mockkObject(S3BackupUtility, recordPrivateCalls = true)
         every { S3BackupUtility["downloadLatestMetadata"](any() as String) } returns origMetadata
@@ -57,10 +58,18 @@ internal class S3BackupUtilityTest {
 //    @Disabled
     fun `test prepare backup with dry-run`() {
         val testDir = getResourcePath("test-origin")!!
-        S3BackupUtility.doBackup(File(testDir), "", true)
+        S3BackupUtility.doBackup(File(testDir), "andrei.test", true)
     }
 
     @Test
+//    @Disabled
+    fun `test backup`() {
+        val testDir = getResourcePath("test-origin")!!
+        S3BackupUtility.doBackup(File(testDir), "andrei.test")
+    }
+
+    @Test
+    @Disabled
     fun `test calculate huge hash`() {
         val testDir = getResourcePath("huge.bin")!!
         val metadata = S3BackupUtility.collectMetadata(File(testDir)) as FileMetadata
@@ -68,6 +77,7 @@ internal class S3BackupUtilityTest {
     }
 
     @Test
+    @Disabled
     fun `test calculate zero hash`() {
         val testDir = getResourcePath("zero.bin")!!
         val metadata = S3BackupUtility.collectMetadata(File(testDir)) as FileMetadata
