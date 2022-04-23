@@ -1,4 +1,4 @@
-package org.s3.backup.lib.model
+package org.s3.backup.lib.metadata.model
 
 import java.io.File
 

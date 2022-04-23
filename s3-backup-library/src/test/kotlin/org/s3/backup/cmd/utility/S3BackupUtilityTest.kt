@@ -9,8 +9,8 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.s3.backup.lib.model.FileMetadata
-import org.s3.backup.lib.model.MetadataNode
+import org.s3.backup.lib.metadata.model.FileMetadata
+import org.s3.backup.lib.metadata.model.MetadataNode
 import org.s3.backup.lib.utilities.S3BackupUtility
 import java.io.File
 import kotlin.test.assertEquals
@@ -27,7 +27,7 @@ internal class S3BackupUtilityTest {
         val origMetadata = S3BackupUtility.collectMetadata(File(origDir))
         mockkObject(S3BackupUtility, recordPrivateCalls = true)
         every { S3BackupUtility["downloadLatestMetadata"](any() as String) } returns origMetadata
-        every { S3BackupUtility["uploadToCloud"](any() as File, any() as File) } returns Unit
+        every { S3BackupUtility["uploadToCloud"](any() as String, any() as File, any() as File) } returns Unit
 
         val freshMetaCapture = slot<List<FileMetadata>>()
         every {

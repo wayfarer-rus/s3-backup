@@ -1,6 +1,6 @@
 package org.s3.backup.lib.utilities
 
-import org.s3.backup.lib.model.FileMetadata
+import org.s3.backup.lib.metadata.model.FileMetadata
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException

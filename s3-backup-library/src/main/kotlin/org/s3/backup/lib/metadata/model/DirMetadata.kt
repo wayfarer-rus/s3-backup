@@ -1,4 +1,4 @@
-package org.s3.backup.lib.model
+package org.s3.backup.lib.metadata.model
 
 @kotlinx.serialization.Serializable
 class DirMetadata(

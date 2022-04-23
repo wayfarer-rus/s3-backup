@@ -3,9 +3,9 @@ package org.s3.backup.lib.utilities
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import org.s3.backup.lib.model.DirMetadata
-import org.s3.backup.lib.model.FileMetadata
-import org.s3.backup.lib.model.MetadataNode
+import org.s3.backup.lib.metadata.model.DirMetadata
+import org.s3.backup.lib.metadata.model.FileMetadata
+import org.s3.backup.lib.metadata.model.MetadataNode
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
@@ -15,7 +15,6 @@ import software.amazon.awssdk.transfer.s3.S3TransferManager
 import software.amazon.awssdk.transfer.s3.UploadFileRequest
 import java.io.File
 import java.nio.file.Files
-import java.security.MessageDigest
 import java.util.Stack
 import java.util.function.Consumer
 
@@ -230,17 +229,3 @@ private fun FileUpload.printProgress() {
         Thread.sleep(1000)
     }
 }
-
-fun sha256(file: File): ByteArray = file.inputStream().use { fis ->
-    val digester = MessageDigest.getInstance("SHa-256")
-    val buffer = ByteArray(4096)
-    var bytesCount: Int
-
-    while (fis.read(buffer).also { bytesCount = it } != -1) {
-        digester.update(buffer, 0, bytesCount)
-    }
-
-    digester.digest()
-}
-
-fun ByteArray.toHex() = joinToString(separator = "") { byte -> "%02x".format(byte) }
