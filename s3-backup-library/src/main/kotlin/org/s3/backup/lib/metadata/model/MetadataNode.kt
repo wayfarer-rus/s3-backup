@@ -6,4 +6,5 @@ sealed class MetadataNode {
     abstract val path: String
     abstract val lastModified: Long
     abstract fun filesList(): List<FileMetadata>
+    abstract fun pathList(): List<String>
 }

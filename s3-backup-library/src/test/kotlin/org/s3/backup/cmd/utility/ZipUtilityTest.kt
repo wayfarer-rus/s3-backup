@@ -8,8 +8,8 @@ import org.s3.backup.lib.utilities.sha256
 import org.s3.backup.lib.utilities.toHex
 import org.s3.backup.lib.utilities.toLong
 import org.s3.backup.lib.zip.model.ZipLfhLocation
-import org.s3.backup.lib.zip.model.readCdfhSignatureData
-import org.s3.backup.lib.zip.model.readEndOfZipFileData
+import org.s3.backup.lib.zip.model.readCdfhSignature
+import org.s3.backup.lib.zip.model.readEndOfZipFileSignature
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.RandomAccessFile
@@ -52,14 +52,14 @@ internal class ZipUtilityTest {
         val fileReferences = mutableMapOf<String, ZipLfhLocation>()
 
         RandomAccessFile(pathname, "r").use { fis ->
-            val endOfZipFileData = readEndOfZipFileData(fis, zipFileSize)
-            var offset = endOfZipFileData.offsetOfStartOfCd.toLong()
+            val endOfZipFileData = readEndOfZipFileSignature(fis, zipFileSize)
+            var offset = endOfZipFileData.offsetOfStartOfCdBytes.toLong()
 
             val cdfhOffset = offset
             var previousFileKey = ""
 
             while (offset > -1 && offset < (cdfhOffset + endOfZipFileData.sizeOfCd)) {
-                val signatureData = readCdfhSignatureData(fis, offset)
+                val signatureData = readCdfhSignature(fis, offset)
 
                 if (previousFileKey.isNotBlank()) {
                     fileReferences[previousFileKey]?.let {

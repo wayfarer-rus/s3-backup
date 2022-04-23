@@ -34,11 +34,10 @@ internal class S3BackupUtilityTest {
             S3BackupUtility["zipNewFiles"](
                 any() as String,
                 any() as String,
-                any() as Boolean,
                 capture(freshMetaCapture)
             )
         } returns Unit
-        S3BackupUtility.doBackup(File(freshDir), "", dryRun = true)
+        S3BackupUtility.doBackup(File(freshDir), "")
         assertTrue { freshMetaCapture.isCaptured }
         assertFalse { freshMetaCapture.isNull }
         assertEquals(1, freshMetaCapture.captured.size)
@@ -55,7 +54,7 @@ internal class S3BackupUtilityTest {
     }
 
     @Test
-//    @Disabled
+    @Disabled
     fun `test prepare backup with dry-run`() {
         val testDir = getResourcePath("test-origin")!!
         S3BackupUtility.doBackup(File(testDir), "andrei.test", true)
@@ -64,8 +63,19 @@ internal class S3BackupUtilityTest {
     @Test
 //    @Disabled
     fun `test backup`() {
-        val testDir = getResourcePath("test-origin")!!
+//        val testDir = getResourcePath("test-origin")!!
+        val testDir = "/Users/andrey.efimov/traceability/poc/s3-backup/s3-backup-library"
         S3BackupUtility.doBackup(File(testDir), "andrei.test")
+    }
+
+    @Test
+    fun `test download file`() {
+        S3BackupUtility.downloadFileFromBackup(
+            "andrei.test",
+            "1650725095448",
+            "/src/main/resources/logback.xml",
+            "/Users/andrey.efimov/traceability/poc/s3-backup/file.xml"
+        )
     }
 
     @Test

@@ -15,4 +15,5 @@ class DirMetadata(
     }
 
     override fun filesList() = _children.flatMap { it.filesList() }
+    override fun pathList() = listOf(path) + _children.flatMap { it.pathList() }
 }

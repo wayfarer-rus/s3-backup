@@ -64,4 +64,34 @@ internal class MainTest {
         assertFalse { flagCapture.isNull }
         assertTrue { flagCapture.captured }
     }
+
+    @Test
+    fun `test list all backups`() {
+        mockkObject(S3BackupUtility)
+        val bnCapture = slot<String>()
+        every { S3BackupUtility.listAllBackups(capture(bnCapture)) } returns emptyList()
+
+        val bucketName = "stub.bucket.name"
+        main(arrayOf("list", bucketName))
+
+        assertTrue { bnCapture.isCaptured }
+        assertEquals(bucketName, bnCapture.captured)
+    }
+
+    @Test
+    fun `test list backup`() {
+        mockkObject(S3BackupUtility)
+        val bnCapture = slot<String>()
+        val bkCapture = slot<String>()
+        every { S3BackupUtility.listBackupContent(capture(bnCapture), capture(bkCapture)) } returns emptyList()
+
+        val bucketName = "stub.bucket.name"
+        val backupKey = "12345678"
+        main(arrayOf("list", bucketName, backupKey))
+
+        assertTrue { bnCapture.isCaptured }
+        assertTrue { bkCapture.isCaptured }
+        assertEquals(bucketName, bnCapture.captured)
+        assertEquals(backupKey, bkCapture.captured)
+    }
 }

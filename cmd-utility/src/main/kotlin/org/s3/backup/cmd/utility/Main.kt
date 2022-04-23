@@ -43,14 +43,33 @@ fun main(args: Array<String>) {
         args.size == 3 && args[0] == "--dry-run"
     }
 
-    val regularCase = {
+    val uploadCase = {
         args.size == 2
     }
 
-    if (dryRunCase()) {
+    val listCase = {
+        args.size in 2..3 && args[0] == "list"
+    }
+
+    val downloadFile = {
+        args.size == 5 && args[0] == "download"
+    }
+
+    if (downloadFile()) {
+        if (validBucketName(args[1])) {
+            S3BackupUtility.downloadFileFromBackup(args[1], args[2], args[3], args[4])
+        }
+    } else if (listCase()) {
+        if (validBucketName(args[1])) {
+            if (args.size == 2)
+                S3BackupUtility.listAllBackups(args[1]).forEach { println(it) }
+            else
+                S3BackupUtility.listBackupContent(args[1], args[2]).forEach { println(it) }
+        }
+    } else if (dryRunCase()) {
         if (validateMainParams(1))
             S3BackupUtility.doBackup(File(args[1]), args[2], dryRun = true)
-    } else if (regularCase()) {
+    } else if (uploadCase()) {
         if (validateMainParams(0))
             S3BackupUtility.doBackup(File(args[0]), args[1])
     } else {
@@ -58,9 +77,7 @@ fun main(args: Array<String>) {
     }
 }
 
-private fun validBucketName(bucketName: String): Boolean {
-    return S3BucketValidator.isValidName(bucketName)
-}
+private fun validBucketName(bucketName: String) = S3BucketValidator.isValidName(bucketName)
 
 // fix for ~ https://stackoverflow.com/questions/7163364/how-to-handle-in-file-paths
 private fun validDirectory(dirName: String): Boolean {

@@ -5,6 +5,8 @@ import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.security.MessageDigest
 
+fun getTempDir(): String = System.getProperty("java.io.tmpdir") ?: ""
+
 fun sha256(file: File): ByteArray = file.inputStream().use { fis ->
     val digester = MessageDigest.getInstance("SHa-256")
     val buffer = ByteArray(4096)

@@ -1,10 +1,17 @@
 package org.s3.backup.lib.utilities
 
 import org.s3.backup.lib.metadata.model.FileMetadata
+import org.s3.backup.lib.zip.model.ZipLfhLocation
+import org.s3.backup.lib.zip.model.readCdfhSignature
+import org.s3.backup.lib.zip.model.readEndOfZipFileSignature
+import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.RandomAccessFile
 import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
 object ZipUtility {
@@ -29,5 +36,52 @@ object ZipUtility {
                 }
             }
         }
+    }
+
+    fun unzipOneFileToDestination(fileInputStream: InputStream, destination: File) {
+        destination.outputStream().use { fos ->
+            ZipInputStream(fileInputStream).use { zis ->
+                zis.nextEntry?.let {
+                    val buff = ByteArray(4096)
+                    var len: Int
+                    while (zis.read(buff).also { len = it } > -1) {
+                        fos.write(buff, 0, len)
+                    }
+                }
+            }
+        }
+    }
+
+    fun offsetsMapFromZipFile(zipFileFullPath: String): Map<String, ZipLfhLocation> {
+        val fileReferences = mutableMapOf<String, ZipLfhLocation>()
+
+        RandomAccessFile(zipFileFullPath, "r").use { fis ->
+            val endOfZipFileData = readEndOfZipFileSignature(fis, fis.length())
+            var offset = endOfZipFileData.offsetOfStartOfCdBytes.toLong()
+
+            val cdfhOffset = offset
+            var previousFileKey = ""
+
+            while (offset > -1 && offset < (cdfhOffset + endOfZipFileData.sizeOfCd)) {
+                val signatureData = readCdfhSignature(fis, offset)
+
+                fileReferences[previousFileKey]?.let {
+                    it.length = signatureData.fileOffset - it.offset
+                }
+
+                fileReferences[signatureData.fileName] = ZipLfhLocation(signatureData.fileOffset)
+                previousFileKey = signatureData.fileName
+
+                offset += signatureData.byteSize()
+            }
+
+            if (previousFileKey.isNotBlank()) {
+                fileReferences[previousFileKey]?.let {
+                    it.length = cdfhOffset - it.offset
+                }
+            }
+        }
+
+        return fileReferences
     }
 }

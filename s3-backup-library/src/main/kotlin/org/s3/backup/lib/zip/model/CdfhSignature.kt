@@ -5,18 +5,18 @@ import org.s3.backup.lib.utilities.toInt
 import org.s3.backup.lib.utilities.toLong
 import java.io.RandomAccessFile
 
-fun readCdfhSignatureData(fis: RandomAccessFile, offset: Long): CdfhSignatureData {
+fun readCdfhSignature(fis: RandomAccessFile, offset: Long): CdfhSignature {
     fis.seek(offset)
     val buff = fis.readNBytes(4)
 
-    if (!buff.contentEquals(CdfhSignatureData.cdfhSignatureByteArray)) {
+    if (!buff.contentEquals(CdfhSignature.cdfhSignatureByteArray)) {
         error("Invalid CDFH signature")
     }
 
     var fileNameLength: Int
     var extraFieldLength: Int
     var commentsLength: Int
-    return CdfhSignatureData(
+    return CdfhSignature(
         versionMadeBy = fis.readNBytes(2).reversedArray().toInt(),
         versionToExtract = fis.readNBytes(2).reversedArray().toInt(),
         generalPurposeBitFlag = fis.readNBytes(2).reversedArray(),
@@ -39,7 +39,7 @@ fun readCdfhSignatureData(fis: RandomAccessFile, offset: Long): CdfhSignatureDat
     )
 }
 
-class CdfhSignatureData(
+class CdfhSignature(
     val versionMadeBy: Int,
     val versionToExtract: Int,
     val generalPurposeBitFlag: ByteArray,
