@@ -1,5 +1,6 @@
 package org.s3.backup.lib.metadata.model
 
+import software.amazon.awssdk.utils.IoUtils
 import java.io.File
 
 @kotlinx.serialization.Serializable
@@ -17,4 +18,13 @@ class FileMetadata(
 
     override fun filesList() = listOf(this)
     override fun pathList() = listOf(path)
+    override fun writeToDisk(pathDest: String) {
+        if (localFileRef == null) error("can't write file '$path' (checksum $checksum) to $pathDest")
+
+        File("$pathDest/$path").outputStream().use { fos ->
+            localFileRef?.inputStream()?.use { fis ->
+                IoUtils.copy(fis, fos)
+            }
+        }
+    }
 }

@@ -244,21 +244,19 @@ object S3BackupUtility {
     }
 
     fun listBackupContent(bucketName: String, backupKey: String): List<String> {
-        val s3 = S3Client.create()
-        val getObjectRequest = getObjectRequest(bucketName, "$backupKey.metadata").build()
-
-        return s3.getObject(getObjectRequest)?.readAllBytes()?.toString(Charsets.UTF_8)?.let {
-            Json.decodeFromString<MetadataNode>(it).pathList()
-        } ?: error("Object not found in bucket '$bucketName' by key '$backupKey'")
+        val (_, backupMetadata) = downloadBackupMetadata(bucketName, backupKey)
+        return backupMetadata?.pathList()
+            ?: error("Object not found in bucket '$bucketName' by key '$backupKey'")
     }
 
-    fun downloadFileFromBackup(bucketName: String, backupKey: String, fileName: String, pathDist: String) {
-        val s3 = S3Client.create()
-        val getObjectRequest = getObjectRequest(bucketName, "$backupKey.metadata").build()
+    fun downloadFileFromBackup(bucketName: String, backupKey: String, filePathToDownload: String, pathDest: String) {
+        if (!File(pathDest).let { it.isDirectory && it.canWrite() }) {
+            error("'$pathDest' must be a writeable directory")
+        }
 
-        val fileNode = s3.getObject(getObjectRequest)?.readAllBytes()?.toString(Charsets.UTF_8)?.let { json ->
-            Json.decodeFromString<MetadataNode>(json).filesList().find { it.path == fileName }
-        } ?: error("File ($fileName) not found in backup $backupKey from bucket $bucketName")
+        val (s3, backupMetadata) = downloadBackupMetadata(bucketName, backupKey)
+        val fileNode = backupMetadata?.filesList()?.find { it.path == filePathToDownload }
+            ?: error("File ($filePathToDownload) not found in backup $backupKey from bucket $bucketName")
 
         val zippedFileInputStream = s3.getObject(
             getObjectRequest(
@@ -267,7 +265,63 @@ object S3BackupUtility {
             ).range(fileNode.archiveLocationRef.toRangeString()).build()
         ).buffered()
 
-        ZipUtility.unzipOneFileToDestination(zippedFileInputStream, File(pathDist))
+        ZipUtility.unzipOneFileToDestination(
+            zippedFileInputStream,
+            File("$pathDest/${File(filePathToDownload).name}")
+        )
+    }
+
+    private fun downloadBackupMetadata(
+        bucketName: String,
+        backupKey: String
+    ): Pair<S3Client, MetadataNode?> {
+        val s3 = S3Client.create()
+        val getObjectRequest = getObjectRequest(bucketName, "$backupKey.metadata").build()
+        val backupMetadata = s3.getObject(getObjectRequest)
+            ?.readAllBytes()
+            ?.toString(Charsets.UTF_8)
+            ?.let { json ->
+                Json.decodeFromString<MetadataNode>(json)
+            }
+        return Pair(s3, backupMetadata)
+    }
+
+    fun restoreBackup(bucketName: String, backupKey: String, pathDest: String) {
+        if (!File(pathDest).let { it.isDirectory && it.canWrite() }) {
+            error("'$pathDest' must be a writeable directory")
+        }
+
+        val (s3, backupMetadata) = downloadBackupMetadata(bucketName, backupKey)
+        if (backupMetadata == null) error("backup $backupKey not found in $bucketName")
+
+        val decompressedData = backupMetadata.filesList()
+            .groupBy { it.archiveLocationRef.archiveName }
+            .mapValues {
+                val rangePair = it.value.fold(Pair<Long, Long>(Long.MAX_VALUE, 0)) { acc, fileMeta ->
+                    val offset = fileMeta.archiveLocationRef.zipLfhLocation?.offset ?: 0
+                    val length = fileMeta.archiveLocationRef.zipLfhLocation?.length ?: 0
+                    kotlin.math.min(acc.first, offset) to kotlin.math.max(acc.second, offset + length)
+                }
+
+                "bytes=${rangePair.first}-${rangePair.second}"
+            }.map { (archiveName, rangeToDownload) ->
+                s3.getObject(
+                    getObjectRequest(
+                        bucketName,
+                        archiveName
+                    ).range(rangeToDownload).build()
+                ).buffered()
+            }.flatMap {
+                ZipUtility.unzipMultipleFilesToDestination(it, File(getTempDir())).entries
+            }.associate {
+                it.key to it.value
+            }
+
+        backupMetadata.filesList().forEach {
+            it.localFileRef = decompressedData[it.checksum]
+        }
+
+        backupMetadata.writeToDisk(pathDest)
     }
 
     private fun getObjectRequest(

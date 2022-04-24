@@ -61,7 +61,7 @@ internal class S3BackupUtilityTest {
     }
 
     @Test
-//    @Disabled
+    @Disabled
     fun `test backup`() {
 //        val testDir = getResourcePath("test-origin")!!
         val testDir = "/Users/andrey.efimov/traceability/poc/s3-backup/s3-backup-library"
@@ -69,12 +69,23 @@ internal class S3BackupUtilityTest {
     }
 
     @Test
+    @Disabled
     fun `test download file`() {
         S3BackupUtility.downloadFileFromBackup(
             "andrei.test",
             "1650725095448",
             "/src/main/resources/logback.xml",
-            "/Users/andrey.efimov/traceability/poc/s3-backup/file.xml"
+            "/Users/andrey.efimov/traceability/poc/s3-backup/"
+        )
+    }
+
+    @Test
+//    @Disabled
+    fun `test restore from backup`() {
+        S3BackupUtility.restoreBackup(
+            "andrei.test",
+            "1650725095448",
+            "/Users/andrey.efimov/traceability/poc/s3-backup/_restore"
         )
     }
 

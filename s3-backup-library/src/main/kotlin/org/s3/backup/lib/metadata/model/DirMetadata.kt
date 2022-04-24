@@ -1,5 +1,7 @@
 package org.s3.backup.lib.metadata.model
 
+import java.io.File
+
 @kotlinx.serialization.Serializable
 class DirMetadata(
     override val name: String,
@@ -16,4 +18,8 @@ class DirMetadata(
 
     override fun filesList() = _children.flatMap { it.filesList() }
     override fun pathList() = listOf(path) + _children.flatMap { it.pathList() }
+    override fun writeToDisk(pathDest: String) {
+        File("$pathDest/$path").mkdirs()
+        _children.forEach { it.writeToDisk(pathDest) }
+    }
 }

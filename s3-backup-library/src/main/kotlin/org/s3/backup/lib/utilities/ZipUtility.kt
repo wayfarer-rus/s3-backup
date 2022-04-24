@@ -38,9 +38,40 @@ object ZipUtility {
         }
     }
 
+    fun unzipMultipleFilesToDestination(fileInputStream: InputStream, destinationDir: File): Map<String, File> {
+        val result = mutableMapOf<String, File>()
+
+        ZipInputStream(fileInputStream).use { zis ->
+            var entry: ZipEntry?
+            while (zis.nextEntry.also { entry = it } != null) {
+                val outputFile = File("$destinationDir/${entry!!.name}")
+
+                outputFile.outputStream().use { fos ->
+                    val buff = ByteArray(4096)
+                    var len: Int
+                    while (zis.read(buff).also { len = it } > -1) {
+                        fos.write(buff, 0, len)
+                    }
+                }
+
+                result[entry!!.name] = outputFile
+            }
+        }
+
+        return result
+    }
+
     fun unzipOneFileToDestination(fileInputStream: InputStream, destination: File) {
         destination.outputStream().use { fos ->
             ZipInputStream(fileInputStream).use { zis ->
+                /*var entry: ZipEntry
+                while (zis.nextEntry.also { entry = it } != null) {
+                    val buff = ByteArray(4096)
+                    var len: Int
+                    while (zis.read(buff).also { len = it } > -1) {
+                        fos.write(buff, 0, len)
+                    }
+                }*/
                 zis.nextEntry?.let {
                     val buff = ByteArray(4096)
                     var len: Int
