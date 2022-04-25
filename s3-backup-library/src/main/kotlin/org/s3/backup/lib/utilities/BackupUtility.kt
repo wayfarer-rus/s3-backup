@@ -1,29 +1,19 @@
 package org.s3.backup.lib.utilities
 
-import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.s3.backup.lib.client.S3Client
 import org.s3.backup.lib.metadata.model.DirMetadata
 import org.s3.backup.lib.metadata.model.FileMetadata
 import org.s3.backup.lib.metadata.model.MetadataNode
-import org.s3.backup.lib.validators.BackupValidators
-import software.amazon.awssdk.services.s3.S3Client
-import software.amazon.awssdk.services.s3.model.GetObjectRequest
-import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
-import software.amazon.awssdk.services.s3.model.PutObjectRequest
-import software.amazon.awssdk.transfer.s3.FileUpload
-import software.amazon.awssdk.transfer.s3.S3TransferManager
-import software.amazon.awssdk.transfer.s3.UploadFileRequest
 import java.io.File
 import java.nio.file.Files
 import java.util.Stack
 
 private val logger = KotlinLogging.logger {}
 
-// all real operations with S3 contained here.
-// TODO:: move everything non-s3 to somewhere else
-internal object S3BackupUtility {
+internal object BackupUtility {
     // the main idea is that we have to create some kind of metadata
     // that will allow us to handle delta-backups
     fun doBackup(directory: File, bucketName: String, dryRun: Boolean = false) {
@@ -70,7 +60,7 @@ internal object S3BackupUtility {
 
         // 5) upload zip file with new metadata file to the cloud
         if (!dryRun) {
-            uploadToCloud(bucketName, File(metadataFileFullPath), File(zipFileFullPath))
+            S3Client.uploadToCloud(bucketName, File(metadataFileFullPath), File(zipFileFullPath))
         }
 
         logger.info { "done" }
@@ -127,52 +117,15 @@ internal object S3BackupUtility {
 
     // TODO: take a look at https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/examples-glacier.html
     private fun downloadLatestMetadata(bucketName: String): MetadataNode? {
-        val entries = collectMetadataEntriesFromBucket(bucketName)
+        val entries = S3Client.collectMetadataEntriesFromBucket(bucketName)
 
         return entries.maxByOrNull {
             it.toLong()
-        }?.let<String, MetadataNode> { key ->
+        }?.let { key ->
             logger.debug { "download latest metadata file $key" }
-            val getObjectRequest = GetObjectRequest.builder()
-                .bucket(bucketName).key("$key.metadata").build()
-
             // all bytes should be fine here, while metadata likely will not be more than 2G
-            val metadataObj = s3.getObject(getObjectRequest).readAllBytes().toString(Charsets.UTF_8)
-            Json.decodeFromString(metadataObj)
+            S3Client.downloadBackupMetadata(bucketName, "$key.metadata")
         }
-    }
-
-    fun collectMetadataEntriesFromBucket(bucketName: String): List<String> {
-        // find latest metadata file
-        val listObjectsRequest = ListObjectsV2Request
-            .builder()
-            .bucket(bucketName)
-            .build()
-
-        return s3.listObjectsV2Paginator(listObjectsRequest)
-            .contents()
-            .mapNotNull { BackupValidators.backupMetadataKeyRegex.find(it.key())?.destructured?.component1() }
-    }
-
-    private fun uploadToCloud(bucketName: String, metadataFile: File, zipFile: File) {
-        logger.info { "uploading to S3..." }
-        val uploadFileRequest: (File, String) -> (UploadFileRequest.Builder) -> Unit = { file, bucket ->
-            { b: UploadFileRequest.Builder ->
-                b.source(file)
-                    .putObjectRequest { req: PutObjectRequest.Builder ->
-                        req.bucket(bucket).key(file.name)
-                    }
-            }
-        }
-
-        val transferManager = S3TransferManager.create()
-        val metadataUpload = transferManager.uploadFile(uploadFileRequest(metadataFile, bucketName))
-        val zipUpload = transferManager.uploadFile(uploadFileRequest(zipFile, bucketName))
-
-        metadataUpload.printProgress(metadataFile.name)
-        zipUpload.printProgress(zipFile.name)
-        metadataUpload.completionFuture().join()
-        zipUpload.completionFuture().join()
     }
 
     // build tree like structure
@@ -237,60 +190,9 @@ internal object S3BackupUtility {
     }
 
     fun bufferedInputStreamFromFileNode(bucketName: String, fileNode: FileMetadata) =
-        bufferedInputStreamFromFileWithRange(
+        S3Client.bufferedInputStreamFromFileWithRange(
             bucketName,
             fileNode.archiveLocationRef.archiveName,
             fileNode.archiveLocationRef.toRangeString()
         )
-
-    fun downloadBackupMetadata(
-        bucketName: String,
-        backupKey: String
-    ): MetadataNode? {
-        logger.debug { "trying to load metadata $backupKey from bucket $bucketName" }
-        val getObjectRequest = getObjectRequest(bucketName, "$backupKey.metadata").build()
-        val backupMetadata = s3.getObject(getObjectRequest)
-            ?.readAllBytes()
-            ?.toString(Charsets.UTF_8)
-            ?.let { json ->
-                logger.debug { "unmarshalling from JSON format to MetadataNode" }
-                Json.decodeFromString<MetadataNode>(json)
-            }
-        logger.debug { "download successful" }
-        return backupMetadata
-    }
-
-    fun bufferedInputStreamFromFileWithRange(
-        bucketName: String,
-        fileName: String,
-        rangeToDownload: String
-    ) = s3.getObject(
-        getObjectRequest(
-            bucketName,
-            fileName
-        ).range(rangeToDownload).build()
-    ).buffered()
-
-    private fun getObjectRequest(
-        bucketName: String,
-        backupKey: String
-    ): GetObjectRequest.Builder = GetObjectRequest.builder()
-        .bucket(bucketName)
-        .key(backupKey)
-
-    // create s3 client from default environment varialbles
-    // good enough for now
-    private val s3 = S3Client.create()
-}
-
-val fuLogger = KotlinLogging.logger("FileUpload")
-private fun FileUpload.printProgress(keyName: String) {
-    while (!this.completionFuture().isDone) {
-        val transferred = this.progress().snapshot().bytesTransferred()
-        val size: Long = this.progress().snapshot().transferSizeInBytes().orElse(0)
-
-        fuLogger.info { "$keyName: $transferred/$size" }
-
-        Thread.sleep(1000)
-    }
 }

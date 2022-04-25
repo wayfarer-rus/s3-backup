@@ -9,7 +9,7 @@ import org.s3.backup.lib.client.request.RestoreFromBackupRequest
 import org.s3.backup.lib.client.response.DownloadFileFromBackupResponse
 import org.s3.backup.lib.client.response.ListAllBackupsResponse
 import org.s3.backup.lib.client.response.ListBackupContentResponse
-import org.s3.backup.lib.utilities.S3BackupUtility
+import org.s3.backup.lib.utilities.BackupUtility
 import org.s3.backup.lib.utilities.ZipUtility
 import org.s3.backup.lib.utilities.getTempDir
 import java.io.File
@@ -32,7 +32,7 @@ class S3BackupClient {
 
         logger.debug { "decompressing downloaded file into temporary file" }
         ZipUtility.unzipOneFileToDestination(
-            fileInputStream = S3BackupUtility.bufferedInputStreamFromFileNode(
+            fileInputStream = BackupUtility.bufferedInputStreamFromFileNode(
                 downloadFileRequest.context.bucketName,
                 fileNode
             ),
@@ -64,7 +64,7 @@ class S3BackupClient {
             // now we have all ranges for all archives that we now must download
             .map { (archiveName, rangeToDownload) ->
                 logger.debug { "downloading range ($rangeToDownload) from $archiveName" }
-                S3BackupUtility.bufferedInputStreamFromFileWithRange(
+                S3Client.bufferedInputStreamFromFileWithRange(
                     bucketName = restoreBackupRequest.context.bucketName,
                     fileName = archiveName,
                     rangeToDownload
@@ -91,7 +91,7 @@ class S3BackupClient {
     }
 
     fun listAllBackups(listAllBackupsRequest: ListAllBackupsRequest): ListAllBackupsResponse {
-        return ListAllBackupsResponse(S3BackupUtility.collectMetadataEntriesFromBucket(listAllBackupsRequest.bucketName))
+        return ListAllBackupsResponse(S3Client.collectMetadataEntriesFromBucket(listAllBackupsRequest.bucketName))
     }
 
     fun listBackupContent(listBackupContentRequest: ListBackupContentRequest): ListBackupContentResponse {
@@ -100,7 +100,7 @@ class S3BackupClient {
     }
 
     fun doBackup(doBackupRequest: DoBackupRequest) {
-        S3BackupUtility.doBackup(
+        BackupUtility.doBackup(
             File(doBackupRequest.directoryToBackup),
             doBackupRequest.bucketName,
             doBackupRequest.isDryRun

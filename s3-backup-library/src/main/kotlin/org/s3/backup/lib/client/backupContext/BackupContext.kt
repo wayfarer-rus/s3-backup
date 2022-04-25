@@ -1,6 +1,6 @@
 package org.s3.backup.lib.client.backupContext
 
-import org.s3.backup.lib.utilities.S3BackupUtility
+import org.s3.backup.lib.client.S3Client
 import org.s3.backup.lib.validators.BackupValidators
 import org.s3.backup.lib.validators.S3BucketValidators
 
@@ -8,7 +8,7 @@ class BackupContext(
     val bucketName: String,
     val backupKey: String
 ) {
-    val backupMetadata = S3BackupUtility.downloadBackupMetadata(bucketName, backupKey)
+    val backupMetadata = S3Client.downloadBackupMetadata(bucketName, backupKey)
         ?: error("Backup with key '$backupKey' wasn't found in bucket '$bucketName'")
 
     class Builder {

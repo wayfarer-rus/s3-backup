@@ -6,9 +6,16 @@ object Messages {
         will backup directory content to given s3 bucket_name
         requires s3 key to be present in the environment
         
-        usage: s3-backup [--dry-run] directory bucket_name
+        usages: 
+            s3-backup [--dry-run] directory bucket_name
+            s3-backup list bucket_name [backup]
+            s3-backup download bucket_name backup file_to_download destination_file
+            s3-backup restore bucket_name backup destination_directory
         
         --dry-run:  will not upload any data, just print delta
+        list:       will list available backups or files from given backup
+        download:   will download given file name to provided destination file
+        restore:    will restore given backup state to given directory
     """.trimIndent()
 }
 
