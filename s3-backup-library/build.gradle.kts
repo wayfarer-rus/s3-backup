@@ -11,7 +11,7 @@ dependencies {
     implementation("software.amazon.awssdk:s3-transfer-manager:2.17.169-PREVIEW")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.3.2")
     implementation("io.github.microutils:kotlin-logging:1.12.0")
-    testImplementation("ch.qos.logback:logback-classic:1.2.11")
+    implementation("ch.qos.logback:logback-classic:1.2.11")
 
     testImplementation("org.junit.jupiter:junit-jupiter:5.8.2")
     testImplementation("com.github.stefanbirkner:system-lambda:1.2.1")

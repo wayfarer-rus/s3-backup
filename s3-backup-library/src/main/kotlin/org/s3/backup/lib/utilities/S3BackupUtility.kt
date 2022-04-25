@@ -7,6 +7,7 @@ import mu.KotlinLogging
 import org.s3.backup.lib.metadata.model.DirMetadata
 import org.s3.backup.lib.metadata.model.FileMetadata
 import org.s3.backup.lib.metadata.model.MetadataNode
+import org.s3.backup.lib.validators.BackupValidators
 import software.amazon.awssdk.services.s3.S3Client
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
@@ -20,7 +21,9 @@ import java.util.Stack
 
 private val logger = KotlinLogging.logger {}
 
-object S3BackupUtility {
+// all real operations with S3 contained here.
+// TODO:: move everything non-s3 to somewhere else
+internal object S3BackupUtility {
     // the main idea is that we have to create some kind of metadata
     // that will allow us to handle delta-backups
     fun doBackup(directory: File, bucketName: String, dryRun: Boolean = false) {
@@ -124,14 +127,14 @@ object S3BackupUtility {
 
     // TODO: take a look at https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/examples-glacier.html
     private fun downloadLatestMetadata(bucketName: String): MetadataNode? {
-        val (s3, entries) = collectMetadataEntriesFromBucket(bucketName)
+        val entries = collectMetadataEntriesFromBucket(bucketName)
 
         return entries.maxByOrNull {
             it.toLong()
         }?.let<String, MetadataNode> { key ->
-            // download latest metadata file
+            logger.debug { "download latest metadata file $key" }
             val getObjectRequest = GetObjectRequest.builder()
-                .bucket(bucketName).key(key).build()
+                .bucket(bucketName).key("$key.metadata").build()
 
             // all bytes should be fine here, while metadata likely will not be more than 2G
             val metadataObj = s3.getObject(getObjectRequest).readAllBytes().toString(Charsets.UTF_8)
@@ -139,21 +142,16 @@ object S3BackupUtility {
         }
     }
 
-    private fun collectMetadataEntriesFromBucket(bucketName: String): Pair<S3Client, List<String>> {
-        val s3 = S3Client.create()
-
+    fun collectMetadataEntriesFromBucket(bucketName: String): List<String> {
         // find latest metadata file
-        val metadataFileNameMatcher = "(\\d{13})\\.metadata".toRegex()
         val listObjectsRequest = ListObjectsV2Request
             .builder()
             .bucket(bucketName)
             .build()
 
-        val entries = s3.listObjectsV2Paginator(listObjectsRequest)
+        return s3.listObjectsV2Paginator(listObjectsRequest)
             .contents()
-            .filter { metadataFileNameMatcher.matches(it.key()) }
-            .mapNotNull { metadataFileNameMatcher.find(it.key())?.destructured?.component1() }
-        return Pair(s3, entries)
+            .mapNotNull { BackupValidators.backupMetadataKeyRegex.find(it.key())?.destructured?.component1() }
     }
 
     private fun uploadToCloud(bucketName: String, metadataFile: File, zipFile: File) {
@@ -238,91 +236,40 @@ object S3BackupUtility {
         }
     }
 
-    fun listAllBackups(bucketName: String): List<String> {
-        val (_, entries) = collectMetadataEntriesFromBucket(bucketName)
-        return entries
-    }
-
-    fun listBackupContent(bucketName: String, backupKey: String): List<String> {
-        val (_, backupMetadata) = downloadBackupMetadata(bucketName, backupKey)
-        return backupMetadata?.pathList()
-            ?: error("Object not found in bucket '$bucketName' by key '$backupKey'")
-    }
-
-    fun downloadFileFromBackup(bucketName: String, backupKey: String, filePathToDownload: String, pathDest: String) {
-        if (!File(pathDest).let { it.isDirectory && it.canWrite() }) {
-            error("'$pathDest' must be a writeable directory")
-        }
-
-        val (s3, backupMetadata) = downloadBackupMetadata(bucketName, backupKey)
-        val fileNode = backupMetadata?.filesList()?.find { it.path == filePathToDownload }
-            ?: error("File ($filePathToDownload) not found in backup $backupKey from bucket $bucketName")
-
-        val zippedFileInputStream = s3.getObject(
-            getObjectRequest(
-                bucketName,
-                fileNode.archiveLocationRef.archiveName
-            ).range(fileNode.archiveLocationRef.toRangeString()).build()
-        ).buffered()
-
-        ZipUtility.unzipOneFileToDestination(
-            zippedFileInputStream,
-            File("$pathDest/${File(filePathToDownload).name}")
+    fun bufferedInputStreamFromFileNode(bucketName: String, fileNode: FileMetadata) =
+        bufferedInputStreamFromFileWithRange(
+            bucketName,
+            fileNode.archiveLocationRef.archiveName,
+            fileNode.archiveLocationRef.toRangeString()
         )
-    }
 
-    private fun downloadBackupMetadata(
+    fun downloadBackupMetadata(
         bucketName: String,
         backupKey: String
-    ): Pair<S3Client, MetadataNode?> {
-        val s3 = S3Client.create()
+    ): MetadataNode? {
+        logger.debug { "trying to load metadata $backupKey from bucket $bucketName" }
         val getObjectRequest = getObjectRequest(bucketName, "$backupKey.metadata").build()
         val backupMetadata = s3.getObject(getObjectRequest)
             ?.readAllBytes()
             ?.toString(Charsets.UTF_8)
             ?.let { json ->
+                logger.debug { "unmarshalling from JSON format to MetadataNode" }
                 Json.decodeFromString<MetadataNode>(json)
             }
-        return Pair(s3, backupMetadata)
+        logger.debug { "download successful" }
+        return backupMetadata
     }
 
-    fun restoreBackup(bucketName: String, backupKey: String, pathDest: String) {
-        if (!File(pathDest).let { it.isDirectory && it.canWrite() }) {
-            error("'$pathDest' must be a writeable directory")
-        }
-
-        val (s3, backupMetadata) = downloadBackupMetadata(bucketName, backupKey)
-        if (backupMetadata == null) error("backup $backupKey not found in $bucketName")
-
-        val decompressedData = backupMetadata.filesList()
-            .groupBy { it.archiveLocationRef.archiveName }
-            .mapValues {
-                val rangePair = it.value.fold(Pair<Long, Long>(Long.MAX_VALUE, 0)) { acc, fileMeta ->
-                    val offset = fileMeta.archiveLocationRef.zipLfhLocation?.offset ?: 0
-                    val length = fileMeta.archiveLocationRef.zipLfhLocation?.length ?: 0
-                    kotlin.math.min(acc.first, offset) to kotlin.math.max(acc.second, offset + length)
-                }
-
-                "bytes=${rangePair.first}-${rangePair.second}"
-            }.map { (archiveName, rangeToDownload) ->
-                s3.getObject(
-                    getObjectRequest(
-                        bucketName,
-                        archiveName
-                    ).range(rangeToDownload).build()
-                ).buffered()
-            }.flatMap {
-                ZipUtility.unzipMultipleFilesToDestination(it, File(getTempDir())).entries
-            }.associate {
-                it.key to it.value
-            }
-
-        backupMetadata.filesList().forEach {
-            it.localFileRef = decompressedData[it.checksum]
-        }
-
-        backupMetadata.writeToDisk(pathDest)
-    }
+    fun bufferedInputStreamFromFileWithRange(
+        bucketName: String,
+        fileName: String,
+        rangeToDownload: String
+    ) = s3.getObject(
+        getObjectRequest(
+            bucketName,
+            fileName
+        ).range(rangeToDownload).build()
+    ).buffered()
 
     private fun getObjectRequest(
         bucketName: String,
@@ -330,6 +277,10 @@ object S3BackupUtility {
     ): GetObjectRequest.Builder = GetObjectRequest.builder()
         .bucket(bucketName)
         .key(backupKey)
+
+    // create s3 client from default environment varialbles
+    // good enough for now
+    private val s3 = S3Client.create()
 }
 
 val fuLogger = KotlinLogging.logger("FileUpload")

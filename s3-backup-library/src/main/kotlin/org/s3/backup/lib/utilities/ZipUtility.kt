@@ -4,6 +4,7 @@ import org.s3.backup.lib.metadata.model.FileMetadata
 import org.s3.backup.lib.zip.model.ZipLfhLocation
 import org.s3.backup.lib.zip.model.readCdfhSignature
 import org.s3.backup.lib.zip.model.readEndOfZipFileSignature
+import software.amazon.awssdk.utils.IoUtils
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
@@ -14,7 +15,7 @@ import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 
-object ZipUtility {
+internal object ZipUtility {
     @Throws(IOException::class)
     @JvmStatic
     fun zipFiles(filesToZip: List<FileMetadata>, zipFilePath: String) {
@@ -47,11 +48,7 @@ object ZipUtility {
                 val outputFile = File("$destinationDir/${entry!!.name}")
 
                 outputFile.outputStream().use { fos ->
-                    val buff = ByteArray(4096)
-                    var len: Int
-                    while (zis.read(buff).also { len = it } > -1) {
-                        fos.write(buff, 0, len)
-                    }
+                    IoUtils.copy(zis, fos)
                 }
 
                 result[entry!!.name] = outputFile
@@ -64,20 +61,8 @@ object ZipUtility {
     fun unzipOneFileToDestination(fileInputStream: InputStream, destination: File) {
         destination.outputStream().use { fos ->
             ZipInputStream(fileInputStream).use { zis ->
-                /*var entry: ZipEntry
-                while (zis.nextEntry.also { entry = it } != null) {
-                    val buff = ByteArray(4096)
-                    var len: Int
-                    while (zis.read(buff).also { len = it } > -1) {
-                        fos.write(buff, 0, len)
-                    }
-                }*/
                 zis.nextEntry?.let {
-                    val buff = ByteArray(4096)
-                    var len: Int
-                    while (zis.read(buff).also { len = it } > -1) {
-                        fos.write(buff, 0, len)
-                    }
+                    IoUtils.copy(zis, fos)
                 }
             }
         }

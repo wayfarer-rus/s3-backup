@@ -19,7 +19,6 @@ import java.util.zip.ZipInputStream
 internal class ZipUtilityTest {
 
     @Test
-//    @Disabled
     fun compress6gigfile() {
         val file = File("/Users/andrey.efimov/traceability/poc/s3-backup/sample.bin")
         val zipFilePath = "/Users/andrey.efimov/traceability/poc/s3-backup/sample.zip"

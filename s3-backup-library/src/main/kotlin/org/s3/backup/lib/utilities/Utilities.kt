@@ -1,6 +1,8 @@
 package org.s3.backup.lib.utilities
 
+import software.amazon.awssdk.utils.IoUtils
 import java.io.File
+import java.io.InputStream
 import java.io.RandomAccessFile
 import java.nio.ByteBuffer
 import java.security.MessageDigest
@@ -49,4 +51,10 @@ fun RandomAccessFile.readNBytes(n: Int): ByteArray {
     }
 
     return buf
+}
+
+fun InputStream.writeToFile(file: File) = use { fis ->
+    file.outputStream().use { fos ->
+        IoUtils.copy(fis, fos)
+    }
 }

@@ -5,15 +5,23 @@ import io.mockk.every
 import io.mockk.junit5.MockKExtension
 import io.mockk.mockkObject
 import io.mockk.slot
+import io.mockk.unmockkAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.s3.backup.lib.utilities.S3BackupUtility
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @ExtendWith(MockKExtension::class)
 internal class MainTest {
+    private val bucketNameErrorText = """
+        Invalid S3 bucket name: %s.
+    """.trimIndent()
+
+    private val directoryErrorText = """
+        Given directory %s is either not a directory or not accessible
+    """.trimIndent()
+
     @Test
     fun helpTest() {
         val output = tapSystemOut {
@@ -34,7 +42,7 @@ internal class MainTest {
         }
 
         assertEquals(
-            Messages.directoryErrorText.format(invalidDir),
+            directoryErrorText.format(invalidDir),
             output?.trim()
         )
     }
@@ -47,7 +55,7 @@ internal class MainTest {
         }
 
         assertEquals(
-            Messages.bucketNameErrorText.format(invalidBucketName),
+            bucketNameErrorText.format(invalidBucketName),
             output?.trim()
         )
     }
@@ -63,35 +71,6 @@ internal class MainTest {
         assertTrue { flagCapture.isCaptured }
         assertFalse { flagCapture.isNull }
         assertTrue { flagCapture.captured }
-    }
-
-    @Test
-    fun `test list all backups`() {
-        mockkObject(S3BackupUtility)
-        val bnCapture = slot<String>()
-        every { S3BackupUtility.listAllBackups(capture(bnCapture)) } returns emptyList()
-
-        val bucketName = "stub.bucket.name"
-        main(arrayOf("list", bucketName))
-
-        assertTrue { bnCapture.isCaptured }
-        assertEquals(bucketName, bnCapture.captured)
-    }
-
-    @Test
-    fun `test list backup`() {
-        mockkObject(S3BackupUtility)
-        val bnCapture = slot<String>()
-        val bkCapture = slot<String>()
-        every { S3BackupUtility.listBackupContent(capture(bnCapture), capture(bkCapture)) } returns emptyList()
-
-        val bucketName = "stub.bucket.name"
-        val backupKey = "12345678"
-        main(arrayOf("list", bucketName, backupKey))
-
-        assertTrue { bnCapture.isCaptured }
-        assertTrue { bkCapture.isCaptured }
-        assertEquals(bucketName, bnCapture.captured)
-        assertEquals(backupKey, bkCapture.captured)
+        unmockkAll()
     }
 }
