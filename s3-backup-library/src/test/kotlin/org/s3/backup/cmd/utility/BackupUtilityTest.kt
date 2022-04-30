@@ -1,50 +1,19 @@
 package org.s3.backup.cmd.utility
 
-import io.mockk.every
 import io.mockk.junit5.MockKExtension
-import io.mockk.mockkObject
-import io.mockk.slot
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
-import org.s3.backup.lib.client.S3Client
 import org.s3.backup.lib.metadata.model.FileMetadata
 import org.s3.backup.lib.metadata.model.MetadataNode
 import org.s3.backup.lib.utilities.BackupUtility
 import java.io.File
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 @ExtendWith(MockKExtension::class)
 internal class BackupUtilityTest {
-
-    @Test
-    fun `test delta comparator`() {
-        val origDir = getResourcePath("test-origin/test")!!
-        val freshDir = getResourcePath("test-compare/test")!!
-        val origMetadata = BackupUtility.collectMetadata(File(origDir))
-        mockkObject(BackupUtility, recordPrivateCalls = true)
-        mockkObject(S3Client)
-        every { BackupUtility["downloadLatestMetadata"](any() as String) } returns origMetadata
-        every { S3Client["uploadToCloud"](any() as String, any() as File, any() as File) } returns Unit
-
-        val freshMetaCapture = slot<List<FileMetadata>>()
-        every {
-            BackupUtility["zipNewFiles"](
-                any() as String,
-                any() as String,
-                capture(freshMetaCapture)
-            )
-        } returns Unit
-        BackupUtility.doBackup(File(freshDir), "")
-        assertTrue { freshMetaCapture.isCaptured }
-        assertFalse { freshMetaCapture.isNull }
-        assertEquals(1, freshMetaCapture.captured.size)
-        assertEquals("zoo.bin", freshMetaCapture.captured[0].name)
-    }
 
     @Test
     @Disabled
@@ -63,7 +32,7 @@ internal class BackupUtilityTest {
     }
 
     @Test
-    @Disabled
+//    @Disabled
     fun `test backup`() {
 //        val testDir = getResourcePath("test-origin")!!
         val testDir = "/Users/andrey.efimov/traceability/poc/s3-backup/s3-backup-library"
@@ -92,7 +61,7 @@ internal class BackupUtilityTest {
         val metadata = BackupUtility.collectMetadata(File(testDir))
         println(metadata)
     }
-
-    private fun getResourcePath(resourceFileName: String) =
-        this::class.java.classLoader?.getResource(resourceFileName)?.path
 }
+
+fun getResourcePath(resourceFileName: String) =
+    BackupUtilityTest::class.java.classLoader?.getResource(resourceFileName)?.path

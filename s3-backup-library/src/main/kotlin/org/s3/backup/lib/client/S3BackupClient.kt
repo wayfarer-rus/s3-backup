@@ -9,9 +9,11 @@ import org.s3.backup.lib.client.request.RestoreFromBackupRequest
 import org.s3.backup.lib.client.response.DownloadFileFromBackupResponse
 import org.s3.backup.lib.client.response.ListAllBackupsResponse
 import org.s3.backup.lib.client.response.ListBackupContentResponse
+import org.s3.backup.lib.metadata.model.FileMetadata
 import org.s3.backup.lib.utilities.BackupUtility
-import org.s3.backup.lib.utilities.ZipUtility
-import org.s3.backup.lib.utilities.getTempDir
+import org.s3.backup.lib.utilities.copyNBytesToOutputStream
+import java.io.BufferedInputStream
+import java.io.ByteArrayInputStream
 import java.io.File
 
 private val logger = KotlinLogging.logger {}
@@ -24,45 +26,50 @@ class S3BackupClient {
             .find { it.path == downloadFileRequest.filePathToDownload }
             ?: error("File '${downloadFileRequest.filePathToDownload}' wasn't found in ${downloadFileRequest.context}.")
 
-        // create temp file that will hold uncompressed data
-        val tmpFile: File = File.createTempFile(
-            downloadFileRequest.context.backupKey,
-            downloadFileRequest.context.bucketName
-        )
-
-        logger.debug { "decompressing downloaded file into temporary file" }
-        ZipUtility.unzipOneFileToDestination(
-            fileInputStream = BackupUtility.bufferedInputStreamFromFileNode(
+        val bufferedInputStream = if (fileNode.size == 0L) {
+            ByteArrayInputStream(ByteArray(0))
+        } else {
+            BackupUtility.bufferedInputStreamFromFileNode(
                 downloadFileRequest.context.bucketName,
                 fileNode
-            ),
-            destination = tmpFile
-        )
+            )
+        }
 
         // return temp file as input stream to the caller
         return DownloadFileFromBackupResponse(
-            inputStream = tmpFile.inputStream()
+            inputStream = bufferedInputStream
         )
     }
 
     fun restoreFromBackup(restoreBackupRequest: RestoreFromBackupRequest) {
         val backupMetadata = restoreBackupRequest.context.backupMetadata
-        val decompressedData = backupMetadata.filesList()
-            // group all files from metadata by its archive residence
+        // group all files from metadata by its archive residence
+        val fileNodesGroupedByBackup = backupMetadata.filesList()
+            .sortedBy { it.archiveLocationRef.zipLfhLocation?.offset }
             .groupBy { it.archiveLocationRef.archiveName }
+        val rangeForBackup: MutableMap<String, Pair<Long, Long>> = mutableMapOf()
+        val dataStreamsByBackupMap = fileNodesGroupedByBackup
             // calculate range for each archive that must be downloaded
-            // TODO:: here we can make better algorithm by comparing prices for bytes downloaded VS amount of requests to the S3
-            .mapValues {
-                val rangePair = it.value.fold(Pair<Long, Long>(Long.MAX_VALUE, 0)) { acc, fileMeta ->
-                    val offset = fileMeta.archiveLocationRef.zipLfhLocation?.offset ?: 0
-                    val length = fileMeta.archiveLocationRef.zipLfhLocation?.length ?: 0
-                    kotlin.math.min(acc.first, offset) to kotlin.math.max(acc.second, offset + length)
-                }
-
-                "bytes=${rangePair.first}-${rangePair.second}"
+            .mapValues { entry ->
+                val folded = entry.value
+                    .distinctBy { it.checksum }
+                    .map {
+                        val offset = it.archiveLocationRef.zipLfhLocation?.offset ?: 0
+                        var length = it.archiveLocationRef.zipLfhLocation?.length ?: 0
+                        // range is inclusive
+                        if (length > 0) length--
+                        offset to offset + length
+                    }.fold(Pair<Long, Long>(Long.MAX_VALUE, 0)) { acc, next ->
+                        // calculating minival ranges is futile
+                        // S3 will return us min-max anyway
+                        kotlin.math.min(acc.first, next.first) to kotlin.math.max(acc.second, next.second)
+                    }
+                // remember this range
+                rangeForBackup[entry.key] = folded
+                "bytes=${folded.first}-${folded.second}"
             }
-            // now we have all ranges for all archives that we now must download
-            .map { (archiveName, rangeToDownload) ->
+            // now we have all ranges for all archives that we have to download
+            .mapValues { (archiveName, rangeToDownload) ->
                 logger.debug { "downloading range ($rangeToDownload) from $archiveName" }
                 S3Client.bufferedInputStreamFromFileWithRange(
                     bucketName = restoreBackupRequest.context.bucketName,
@@ -70,24 +77,73 @@ class S3BackupClient {
                     rangeToDownload
                 )
             }
-            // here we do the decompression of all files from range to the temp directory
-            // at this point all files will have wierd names
-            .flatMap {
-                logger.debug { "decompressing downloaded content to temp directory: ${getTempDir()}" }
-                ZipUtility.unzipMultipleFilesToDestination(it, File(getTempDir())).entries
-            }
-            // associate all downloaded files by their wierd names (sha-256) with actual file
-            .associate {
-                it.key to it.value
-            }
 
-        // apply content from temp directory to metadata
-        backupMetadata.filesList().forEach {
-            it.localFileRef = decompressedData[it.checksum]
+        // write to disk
+        flushToDisk(
+            restoreBackupRequest.destinationDirectory,
+            fileNodesGroupedByBackup,
+            dataStreamsByBackupMap,
+            rangeForBackup
+        )
+
+        logger.debug { "closing all opened streams..." }
+        dataStreamsByBackupMap.forEach { (_, stream) -> stream.close() }
+        logger.debug { "restoration complete" }
+    }
+
+    private fun flushToDisk(
+        destinationDirectory: String,
+        // file nodes ordered by offset and grouped by backup number
+        fileNodesGroupedByBackup: Map<String, List<FileMetadata>>,
+        // data streams for requested backups
+        dataStreamsByBackupMap: Map<String, BufferedInputStream>,
+        // requested range values for backups
+        // needed to calculate correct offset in data stream
+        rangeForBackup: MutableMap<String, Pair<Long, Long>>
+    ) {
+        val extractedFilesMap: MutableMap<String, File> = mutableMapOf()
+
+        fileNodesGroupedByBackup.forEach { (backupKey, fileNodes) ->
+            logger.debug { "reading data from $backupKey backup..." }
+            var currentOffset = 0L
+
+            fileNodes.forEach { fileNode ->
+                // create file object pointing to specified location
+                val f = File(destinationDirectory + fileNode.path)
+                logger.debug { "extracting file ${f.name} to path: ${f.path}" }
+                // make directories
+                f.parentFile.mkdirs()
+
+                // if file is an empty file just create it
+                if (fileNode.size == 0L) f.createNewFile()
+                else if (extractedFilesMap[fileNode.checksum] != null) {
+                    extractedFilesMap[fileNode.checksum]?.copyTo(f, true)
+                }
+                // otherwise we read its content out of the stream from cloud
+                else {
+                    dataStreamsByBackupMap[backupKey]?.let { backupDataStream ->
+                        // calculate offset in stream
+                        val offset =
+                            (fileNode.archiveLocationRef.zipLfhLocation?.offset ?: 0L) -
+                                (rangeForBackup[backupKey]?.first ?: 0L)
+
+                        // we do need while loop here, while BufferedInputStream reads in chunks
+                        while (offset > currentOffset) {
+                            currentOffset += backupDataStream.skip(offset - currentOffset)
+                        }
+
+                        val size = fileNode.size
+
+                        f.outputStream().use { fos ->
+                            backupDataStream.copyNBytesToOutputStream(fos, size)
+                        }
+                        currentOffset += size
+                    }
+                }
+                // remember file by checksum
+                extractedFilesMap[fileNode.checksum] = f
+            }
         }
-
-        logger.debug { "copy data from temp directory to the given output directory: ${restoreBackupRequest.destinationDirectory}" }
-        backupMetadata.writeToDisk(restoreBackupRequest.destinationDirectory)
     }
 
     fun listAllBackups(listAllBackupsRequest: ListAllBackupsRequest): ListAllBackupsResponse {

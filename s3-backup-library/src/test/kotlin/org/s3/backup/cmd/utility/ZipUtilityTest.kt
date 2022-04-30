@@ -3,6 +3,7 @@ package org.s3.backup.cmd.utility
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.s3.backup.lib.metadata.model.FileMetadata
+import org.s3.backup.lib.utilities.BYTE_BUFFER_SIZE
 import org.s3.backup.lib.utilities.ZipUtility
 import org.s3.backup.lib.utilities.sha256
 import org.s3.backup.lib.utilities.toHex
@@ -92,7 +93,7 @@ internal class ZipUtilityTest {
                 ByteArrayInputStream(fis.readNBytes(size.toInt())).use { bais ->
                     ZipInputStream(bais).use { zis ->
                         zis.nextEntry?.let {
-                            val buff = ByteArray(4096)
+                            val buff = ByteArray(BYTE_BUFFER_SIZE)
                             var len: Int
                             while (zis.read(buff).also { len = it } > -1) {
                                 fos.write(buff, 0, len)

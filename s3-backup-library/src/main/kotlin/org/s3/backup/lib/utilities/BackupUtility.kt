@@ -1,8 +1,7 @@
 package org.s3.backup.lib.utilities
 
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.s3.backup.lib.DataBlobPublisher
 import org.s3.backup.lib.client.S3Client
 import org.s3.backup.lib.metadata.model.DirMetadata
 import org.s3.backup.lib.metadata.model.FileMetadata
@@ -17,11 +16,8 @@ internal object BackupUtility {
     // the main idea is that we have to create some kind of metadata
     // that will allow us to handle delta-backups
     fun doBackup(directory: File, bucketName: String, dryRun: Boolean = false) {
-        val currentTimestamp = System.currentTimeMillis()
+        val currentTimestamp = "${System.currentTimeMillis()}"
         val metadataFileName = "$currentTimestamp.metadata"
-        val zipFileName = "$currentTimestamp.zip"
-        val metadataFileFullPath = "${getTempDir()}$metadataFileName"
-        val zipFileFullPath = "${getTempDir()}$zipFileName"
 
         logger.info { "access bucket and download latest metadata file..." }
         val latestBackupMetadata: MetadataNode? = downloadLatestMetadata(bucketName)
@@ -29,7 +25,7 @@ internal object BackupUtility {
         val freshMetadata = collectMetadata(directory)
 
         // compare root of the bucket metadata with current root
-        if (latestBackupMetadata != null && freshMetadata.name == latestBackupMetadata.name) {
+        val dataBlobPublisher = if (latestBackupMetadata != null && freshMetadata.name == latestBackupMetadata.name) {
             logger.info { "calculate delta" }
             val newOrUpdatedFiles = updateOldFilesAndFindNewFiles(latestBackupMetadata, freshMetadata)
 
@@ -39,28 +35,18 @@ internal object BackupUtility {
                 return
             }
 
-            // 4) for new checksums create new zip-file
-            if (!dryRun) {
-                zipNewFiles(zipFileFullPath, zipFileName, newOrUpdatedFiles)
-            }
-        } else {
+            // 4) for new files create stream
+            DataBlobPublisher(name = currentTimestamp, newOrUpdatedFiles)
+        } else if (latestBackupMetadata == null) {
             // completely new backup
-            // compress it to Zip
-            if (!dryRun) {
-                zipNewFiles(zipFileFullPath, zipFileName, freshMetadata.filesList())
-            }
+            DataBlobPublisher(name = currentTimestamp, freshMetadata.filesList())
+        } else {
+            error("Backup of different directories are not supported. Current backup directory is ${latestBackupMetadata.name}")
         }
 
-        val data = Json.encodeToString(freshMetadata)
-        logger.debug { "metadata file will be created here: $metadataFileFullPath" }
-
+        // 5) upload blob file with new metadata file to the cloud
         if (!dryRun) {
-            File(metadataFileFullPath).also { it.writeText(data) }
-        }
-
-        // 5) upload zip file with new metadata file to the cloud
-        if (!dryRun) {
-            S3Client.uploadToCloud(bucketName, File(metadataFileFullPath), File(zipFileFullPath))
+            S3Client.uploadToCloud(bucketName, metadataFileName, freshMetadata, dataBlobPublisher)
         }
 
         logger.info { "done" }
@@ -92,29 +78,6 @@ internal object BackupUtility {
         return newOrUpdatedFiles
     }
 
-    private fun zipNewFiles(
-        zipFileFullPath: String,
-        zipFileName: String,
-        fileCards: List<FileMetadata>
-    ) {
-        // collect files distinct by the checksum
-        // this is new files. All new files will have new zip file name as reference
-        val distinctFileCards = fileCards
-            .onEach {
-                it.archiveLocationRef.archiveName = zipFileName
-            }
-            .distinctBy { it.checksum }
-
-        logger.debug { "zip archive will be created here: $zipFileFullPath" }
-        logger.info { "compression in progress. Please wait..." }
-        ZipUtility.zipFiles(distinctFileCards, zipFileFullPath)
-        logger.info { "compression complete; updating metadata..." }
-        val zipFilesOffsetsMap = ZipUtility.offsetsMapFromZipFile(zipFileFullPath)
-        fileCards.forEach {
-            it.archiveLocationRef.zipLfhLocation = zipFilesOffsetsMap[it.checksum]
-        }
-    }
-
     // TODO: take a look at https://docs.aws.amazon.com/sdk-for-java/latest/developer-guide/examples-glacier.html
     private fun downloadLatestMetadata(bucketName: String): MetadataNode? {
         val entries = S3Client.collectMetadataEntriesFromBucket(bucketName)
@@ -124,7 +87,7 @@ internal object BackupUtility {
         }?.let { key ->
             logger.debug { "download latest metadata file $key" }
             // all bytes should be fine here, while metadata likely will not be more than 2G
-            S3Client.downloadBackupMetadata(bucketName, "$key.metadata")
+            S3Client.downloadBackupMetadata(bucketName, key)
         }
     }
 

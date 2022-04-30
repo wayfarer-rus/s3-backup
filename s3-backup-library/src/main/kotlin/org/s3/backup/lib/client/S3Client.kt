@@ -1,26 +1,28 @@
 package org.s3.backup.lib.client
 
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import mu.KotlinLogging
+import org.s3.backup.lib.DataBlobPublisher
 import org.s3.backup.lib.metadata.model.MetadataNode
 import org.s3.backup.lib.validators.BackupValidators
+import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
-import software.amazon.awssdk.services.s3.model.PutObjectRequest
-import software.amazon.awssdk.transfer.s3.FileUpload
+import software.amazon.awssdk.transfer.s3.ObjectTransfer
 import software.amazon.awssdk.transfer.s3.S3TransferManager
-import software.amazon.awssdk.transfer.s3.UploadFileRequest
-import java.io.File
 
 private val logger = KotlinLogging.logger {}
+const val MAX_PART_SIZE = 5L * 1024L * 1024L * 1024L // 5 GiB
+const val DEFAULT_PART_SIZE = 8 * 1024 * 1024L // 8 MiB
+const val MAX_PARTS = 10_000
 
 // all real operations with S3 contained here.
 internal object S3Client {
     // create s3 client from default environment varialbles
     // good enough for now
     private val s3 = software.amazon.awssdk.services.s3.S3Client.create()
-    private val transferManager = S3TransferManager.create()
 
     fun collectMetadataEntriesFromBucket(bucketName: String): List<String> {
         // find latest metadata file
@@ -62,24 +64,45 @@ internal object S3Client {
         ).range(rangeToDownload).build()
     ).buffered()
 
-    fun uploadToCloud(bucketName: String, metadataFile: File, zipFile: File) {
-        logger.info { "uploading to S3..." }
-        val uploadFileRequest: (File, String) -> (UploadFileRequest.Builder) -> Unit = { file, bucket ->
-            { b: UploadFileRequest.Builder ->
-                b.source(file)
-                    .putObjectRequest { req: PutObjectRequest.Builder ->
-                        req.bucket(bucket).key(file.name)
-                    }
-            }
+    fun uploadToCloud(
+        bucketName: String,
+        metadataKey: String,
+        metadata: MetadataNode,
+        dataBlobPublisher: DataBlobPublisher
+    ) {
+        if (dataBlobPublisher.estimatedContentLength > MAX_PARTS * MAX_PART_SIZE) {
+            error("Can't upload more than ${MAX_PARTS * MAX_PART_SIZE} bytes")
         }
+        logger.info { "uploading to S3..." }
+        val transferManager = S3TransferManager
+            .builder().s3ClientConfiguration {
+                it.minimumPartSizeInBytes(
+                    kotlin.math.max(
+                        DEFAULT_PART_SIZE,
+                        dataBlobPublisher.estimatedContentLength / MAX_PARTS
+                    )
+                )
+            }.build()
 
-        val metadataUpload = transferManager.uploadFile(uploadFileRequest(metadataFile, bucketName))
-        val zipUpload = transferManager.uploadFile(uploadFileRequest(zipFile, bucketName))
+        val blobUpload = transferManager.upload { u ->
+            u.putObjectRequest { porb ->
+                porb.bucket(bucketName).key(dataBlobPublisher.name)
+                    .contentLength(dataBlobPublisher.estimatedContentLength)
+            }
+            u.requestBody(AsyncRequestBody.fromPublisher(dataBlobPublisher))
+        }
+        blobUpload.printProgress(dataBlobPublisher.name)
+        // we have to await while blob is completely uploaded to calculate offsets
+        blobUpload.completionFuture().join()
 
-        metadataUpload.printProgress(metadataFile.name)
-        zipUpload.printProgress(zipFile.name)
+        val metadataUpload = transferManager.upload { u ->
+            u.putObjectRequest { or ->
+                or.bucket(bucketName).key(metadataKey)
+            }
+            u.requestBody(AsyncRequestBody.fromString(Json.encodeToString(metadata)))
+        }
+        metadataUpload.printProgress(metadata.name)
         metadataUpload.completionFuture().join()
-        zipUpload.completionFuture().join()
     }
 
     private fun getObjectRequest(
@@ -91,7 +114,7 @@ internal object S3Client {
 }
 
 val fuLogger = KotlinLogging.logger("FileUpload")
-private fun FileUpload.printProgress(keyName: String) {
+private fun ObjectTransfer.printProgress(keyName: String) {
     while (!this.completionFuture().isDone) {
         val transferred = this.progress().snapshot().bytesTransferred()
         val size: Long = this.progress().snapshot().transferSizeInBytes().orElse(0)

@@ -26,7 +26,7 @@ internal object ZipUtility {
                         FileInputStream(localFile).use { fis ->
                             val zipEntry = ZipEntry(fileToZip.checksum)
                             zipOut.putNextEntry(zipEntry)
-                            val bytes = ByteArray(4096)
+                            val bytes = ByteArray(BYTE_BUFFER_SIZE)
                             var length: Int
 
                             while (fis.read(bytes).also { length = it } > -1) {

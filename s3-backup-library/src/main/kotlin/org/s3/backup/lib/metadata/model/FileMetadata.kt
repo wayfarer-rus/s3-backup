@@ -2,6 +2,7 @@ package org.s3.backup.lib.metadata.model
 
 import software.amazon.awssdk.utils.IoUtils
 import java.io.File
+import java.io.FileInputStream
 
 @kotlinx.serialization.Serializable
 class FileMetadata(
@@ -15,6 +16,14 @@ class FileMetadata(
 
     @kotlinx.serialization.Transient
     var localFileRef: File? = null
+
+    @kotlinx.serialization.Transient
+    private val _inputStream: Lazy<FileInputStream?> = lazy {
+        localFileRef?.inputStream()
+    }
+
+    val inputStream: FileInputStream?
+        get() = _inputStream.value
 
     override fun filesList() = listOf(this)
     override fun pathList() = listOf(path)
