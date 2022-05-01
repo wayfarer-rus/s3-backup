@@ -45,7 +45,7 @@ class S3BackupClient {
         val backupMetadata = restoreBackupRequest.context.backupMetadata
         // group all files from metadata by its archive residence
         val fileNodesGroupedByBackup = backupMetadata.filesList()
-            .sortedBy { it.archiveLocationRef.zipLfhLocation?.offset }
+            .sortedBy { it.archiveLocationRef.fileLocation.offset }
             .groupBy { it.archiveLocationRef.archiveName }
         val rangeForBackup: MutableMap<String, Pair<Long, Long>> = mutableMapOf()
         val dataStreamsByBackupMap = fileNodesGroupedByBackup
@@ -54,8 +54,8 @@ class S3BackupClient {
                 val folded = entry.value
                     .distinctBy { it.checksum }
                     .map {
-                        val offset = it.archiveLocationRef.zipLfhLocation?.offset ?: 0
-                        var length = it.archiveLocationRef.zipLfhLocation?.length ?: 0
+                        val offset = it.archiveLocationRef.fileLocation.offset
+                        var length = it.archiveLocationRef.fileLocation.length
                         // range is inclusive
                         if (length > 0) length--
                         offset to offset + length
@@ -124,7 +124,7 @@ class S3BackupClient {
                     dataStreamsByBackupMap[backupKey]?.let { backupDataStream ->
                         // calculate offset in stream
                         val offset =
-                            (fileNode.archiveLocationRef.zipLfhLocation?.offset ?: 0L) -
+                            fileNode.archiveLocationRef.fileLocation.offset -
                                 (rangeForBackup[backupKey]?.first ?: 0L)
 
                         // we do need while loop here, while BufferedInputStream reads in chunks

@@ -3,13 +3,13 @@ package org.s3.backup.lib.metadata.model
 @kotlinx.serialization.Serializable
 class ArchiveLocationRef(
     var archiveName: String = "",
-    var zipLfhLocation: ZipLfhLocation? = null
+    var fileLocation: FileLocationInArchive = FileLocationInArchive()
 ) {
-    fun toRangeString() = zipLfhLocation!!.toRangeString()
+    fun toRangeString() = fileLocation.toRangeString()
 }
 
 @kotlinx.serialization.Serializable
-class ZipLfhLocation(
+class FileLocationInArchive(
     var offset: Long = 0,
     var length: Long = 0
 ) {

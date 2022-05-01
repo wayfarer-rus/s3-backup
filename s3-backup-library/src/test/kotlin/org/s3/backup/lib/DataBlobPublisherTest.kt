@@ -47,8 +47,7 @@ internal class DataBlobPublisherTest {
             assertEquals(0, testable.available())
             assertTrue {
                 filesMetadata.all {
-                    it.archiveLocationRef.archiveName == "test" &&
-                        it.archiveLocationRef.zipLfhLocation != null
+                    it.archiveLocationRef.archiveName == "test"
                 }
             }
         }

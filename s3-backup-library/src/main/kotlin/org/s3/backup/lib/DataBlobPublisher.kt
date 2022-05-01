@@ -2,8 +2,8 @@ package org.s3.backup.lib
 
 import org.reactivestreams.Publisher
 import org.reactivestreams.Subscriber
+import org.s3.backup.lib.metadata.model.FileLocationInArchive
 import org.s3.backup.lib.metadata.model.FileMetadata
-import org.s3.backup.lib.metadata.model.ZipLfhLocation
 import org.s3.backup.lib.utilities.BYTE_BUFFER_SIZE
 import java.io.BufferedInputStream
 import java.io.IOException
@@ -54,7 +54,7 @@ class DataBlobStream(val name: String, fileReferencesList: List<FileMetadata>) :
         cfr.inputStream?.close()
         // write offset and size
         cfr.archiveLocationRef.archiveName = name
-        cfr.archiveLocationRef.zipLfhLocation = ZipLfhLocation(offset = offset, length = cursor)
+        cfr.archiveLocationRef.fileLocation = FileLocationInArchive(offset = offset, length = cursor)
         offset += cursor
         cursor = 0
         // switch to the next file
