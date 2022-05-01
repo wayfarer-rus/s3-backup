@@ -11,5 +11,4 @@ object FileValidators {
     }
 
     fun isValidInputDir(directory: String) = File(directory).let { it.exists() && it.isDirectory && it.canRead() }
-    fun isValidInputFile(file: File) = file.let { it.exists() && it.isFile && it.canRead() }
 }

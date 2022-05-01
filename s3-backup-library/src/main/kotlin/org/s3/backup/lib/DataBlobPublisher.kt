@@ -3,8 +3,8 @@ package org.s3.backup.lib
 import org.reactivestreams.Publisher
 import org.reactivestreams.Subscriber
 import org.s3.backup.lib.metadata.model.FileMetadata
+import org.s3.backup.lib.metadata.model.ZipLfhLocation
 import org.s3.backup.lib.utilities.BYTE_BUFFER_SIZE
-import org.s3.backup.lib.zip.model.ZipLfhLocation
 import java.io.BufferedInputStream
 import java.io.IOException
 import java.io.InputStream

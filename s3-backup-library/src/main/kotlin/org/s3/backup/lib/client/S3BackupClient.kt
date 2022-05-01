@@ -60,7 +60,7 @@ class S3BackupClient {
                         if (length > 0) length--
                         offset to offset + length
                     }.fold(Pair<Long, Long>(Long.MAX_VALUE, 0)) { acc, next ->
-                        // calculating minival ranges is futile
+                        // calculating minimal ranges is futile
                         // S3 will return us min-max anyway
                         kotlin.math.min(acc.first, next.first) to kotlin.math.max(acc.second, next.second)
                     }

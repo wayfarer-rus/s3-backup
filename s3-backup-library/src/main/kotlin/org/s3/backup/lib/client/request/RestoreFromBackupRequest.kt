@@ -10,7 +10,7 @@ class RestoreFromBackupRequest(
 
     class Builder {
         var destinationDirectory: String = ""
-        lateinit var backupContext: BackupContext
+        private lateinit var backupContext: BackupContext
 
         fun build(): RestoreFromBackupRequest {
             if (!FileValidators.isValidOutputDir(destinationDirectory)) {

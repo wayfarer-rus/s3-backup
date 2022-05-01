@@ -8,7 +8,7 @@ class DownloadFileFromBackupRequest(
 ) {
     class Builder {
         var filePathToDownload: String = ""
-        lateinit var backupContext: BackupContext
+        private lateinit var backupContext: BackupContext
 
         fun build(): DownloadFileFromBackupRequest {
             if (filePathToDownload.isBlank()) {

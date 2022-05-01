@@ -4,7 +4,7 @@ import org.s3.backup.lib.client.backupContext.BackupContext
 
 class ListBackupContentRequest(val backupContext: BackupContext) {
     class Builder {
-        lateinit var backupContext: BackupContext
+        private lateinit var backupContext: BackupContext
 
         fun build(): ListBackupContentRequest {
             return ListBackupContentRequest(backupContext)

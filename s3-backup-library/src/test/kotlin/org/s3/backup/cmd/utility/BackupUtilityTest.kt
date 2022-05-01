@@ -32,7 +32,7 @@ internal class BackupUtilityTest {
     }
 
     @Test
-//    @Disabled
+    @Disabled
     fun `test backup`() {
 //        val testDir = getResourcePath("test-origin")!!
         val testDir = "/Users/andrey.efimov/traceability/poc/s3-backup/s3-backup-library"

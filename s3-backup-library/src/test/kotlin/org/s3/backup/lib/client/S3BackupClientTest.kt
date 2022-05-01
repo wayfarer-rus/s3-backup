@@ -1,5 +1,6 @@
 package org.s3.backup.lib.client
 
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.s3.backup.lib.client.request.downloadFileFromBackupRequest
 import org.s3.backup.lib.client.request.restoreFromBackupRequest
@@ -8,7 +9,7 @@ import java.io.ByteArrayOutputStream
 internal class S3BackupClientTest {
 
     @Test
-//    @Disabled
+    @Disabled
     fun downloadFromBackup() {
         val result = ByteArrayOutputStream(372).use { baos ->
             S3BackupClient.create().downloadFromBackup(
@@ -26,7 +27,7 @@ internal class S3BackupClientTest {
     }
 
     @Test
-    // @Disabled
+    @Disabled
     fun restoreBackup() {
         S3BackupClient.create().restoreFromBackup(
             restoreFromBackupRequest {

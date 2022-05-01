@@ -1,6 +1,7 @@
 package org.s3.backup.lib
 
 import io.mockk.junit5.MockKExtension
+import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
 import org.s3.backup.cmd.utility.getResourcePath
@@ -14,7 +15,7 @@ import kotlin.test.assertTrue
 @ExtendWith(MockKExtension::class)
 internal class DataBlobPublisherTest {
     @Test
-//    @Disabled
+    @Disabled
     fun testForDebug() {
         val fileMetadataList = BackupUtility.collectMetadata(
             File("/Users/andrey.efimov/traceability/poc/s3-backup/s3-backup-library")

@@ -20,7 +20,7 @@ const val MAX_PARTS = 10_000
 
 // all real operations with S3 contained here.
 internal object S3Client {
-    // create s3 client from default environment varialbles
+    // create s3 client from default environment variables
     // good enough for now
     private val s3 = software.amazon.awssdk.services.s3.S3Client.create()
 

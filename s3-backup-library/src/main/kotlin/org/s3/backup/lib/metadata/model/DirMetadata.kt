@@ -8,18 +8,16 @@ class DirMetadata(
     override val path: String,
     override val lastModified: Long,
 ) : MetadataNode() {
-    private val _children: MutableList<MetadataNode> = mutableListOf()
-    val children: List<MetadataNode>
-        get() = _children
+    private val children: MutableList<MetadataNode> = mutableListOf()
 
     fun add(newNode: MetadataNode) {
-        _children.add(newNode)
+        children.add(newNode)
     }
 
-    override fun filesList() = _children.flatMap { it.filesList() }
-    override fun pathList() = listOf(path) + _children.flatMap { it.pathList() }
+    override fun filesList() = children.flatMap { it.filesList() }
+    override fun pathList() = listOf(path) + children.flatMap { it.pathList() }
     override fun writeToDisk(pathDest: String) {
         File("$pathDest/$path").mkdirs()
-        _children.forEach { it.writeToDisk(pathDest) }
+        children.forEach { it.writeToDisk(pathDest) }
     }
 }
