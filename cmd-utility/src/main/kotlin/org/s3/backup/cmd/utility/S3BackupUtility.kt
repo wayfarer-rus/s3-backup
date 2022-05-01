@@ -1,5 +1,7 @@
 package org.s3.backup.cmd.utility
 
+import org.s3.backup.cmd.utility.PathUtility.resolvePath
+import org.s3.backup.cmd.utility.PathUtility.workDirectory
 import org.s3.backup.lib.client.S3BackupClient
 import org.s3.backup.lib.client.request.doBackupRequest
 import org.s3.backup.lib.client.request.downloadFileFromBackupRequest
@@ -41,8 +43,10 @@ object S3BackupUtility {
         bucketName: String,
         backupKey: String,
         filePathToDownload: String,
-        pathDest: String
+        pathDestProposition: String? = null
     ) {
+        val pathDest = resolvePath(pathDestProposition) ?: workDirectory(File(filePathToDownload).name)
+
         if (!FileValidators.isValidOutputFile(pathDest)) {
             canNotWriteOutputError(pathDest)
         }
@@ -56,6 +60,7 @@ object S3BackupUtility {
         }
 
         s3BackupClient.downloadFromBackup(downloadFileRequest).inputStream.writeToFile(File(pathDest))
+        println("file saved as '$pathDest'")
     }
 
     fun restoreFromBackup(
@@ -68,16 +73,16 @@ object S3BackupUtility {
                 this.bucketName = bucketName
                 this.backupKey = backupKey
             }
-            this.destinationDirectory = pathDest
+            this.destinationDirectory = resolvePath(pathDest)!!
         }
 
         s3BackupClient.restoreFromBackup(restoreBackupRequest)
     }
 
-    fun doBackup(directoryToBackup: String, bucketName: String, dryRun: Boolean = false) {
+    fun doBackup(bucketName: String, directoryToBackup: String, dryRun: Boolean = false) {
         val doBackupRequest = doBackupRequest {
             this.bucketName = bucketName
-            this.directoryToBackup = directoryToBackup
+            this.directoryToBackup = resolvePath(directoryToBackup)!!
             this.dryRun = dryRun
         }
 

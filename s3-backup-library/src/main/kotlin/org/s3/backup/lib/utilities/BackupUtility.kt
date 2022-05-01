@@ -47,6 +47,17 @@ internal object BackupUtility {
         // 5) upload blob file with new metadata file to the cloud
         if (!dryRun) {
             S3Client.uploadToCloud(bucketName, metadataFileName, freshMetadata, dataBlobPublisher)
+        } else {
+            logger.info {
+                """
+                    
+                    bucket name $bucketName
+                    backup key ${dataBlobPublisher.name}
+                    backup files from '$directory'
+                    backup files count: ${dataBlobPublisher.fileReferencesList.size}
+                    backup estimated size ${dataBlobPublisher.estimatedContentLength}
+                """.trimIndent()
+            }
         }
 
         logger.info { "done" }

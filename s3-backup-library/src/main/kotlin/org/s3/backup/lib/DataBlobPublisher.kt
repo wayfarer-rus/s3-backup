@@ -13,13 +13,53 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
 
-class DataBlobPublisher(val name: String, fileReferencesList: List<FileMetadata>) : Publisher<ByteBuffer> {
+class DataBlobPublisher(val name: String, val fileReferencesList: List<FileMetadata>) : Publisher<ByteBuffer> {
     private val bufferSize = BYTE_BUFFER_SIZE
     private val dataBlobStream = BufferedInputStream(DataBlobStream(name, fileReferencesList), bufferSize)
     val estimatedContentLength = fileReferencesList.sumOf { it.size }
 
     override fun subscribe(subscriber: Subscriber<in ByteBuffer>?) {
         subscriber?.onSubscribe(DataBlobSubscription(subscriber, dataBlobStream))
+    }
+}
+
+class DataBlobSubscription(
+    private val subscriber: Subscriber<in ByteBuffer>,
+    private val dataBlobStream: BufferedInputStream,
+) : org.reactivestreams.Subscription {
+    // single thread executor will return chunks in order
+    private val executor: ExecutorService = Executors.newSingleThreadExecutor()
+    private var futureList: MutableList<Future<*>> = mutableListOf()
+    private var completed = false
+
+    @Synchronized
+    override fun request(n: Long) {
+        if (!completed) {
+            if (n <= 0) {
+                executor.execute { subscriber.onError(IllegalArgumentException()) }
+            } else {
+                futureList.add(
+                    executor.submit {
+                        val nextChunk = dataBlobStream.readBytes()
+                        subscriber.onNext(ByteBuffer.wrap(nextChunk))
+
+                        if (nextChunk.isEmpty()) {
+                            completed = true
+                            subscriber.onComplete()
+                        }
+                    }
+                )
+            }
+        }
+    }
+
+    @Synchronized
+    override fun cancel() {
+        completed = true
+        // cancel all requests and await
+        futureList.onEach { it.cancel(false) }.forEach { it.get() }
+        // close data stream
+        dataBlobStream.close()
     }
 }
 
@@ -98,45 +138,5 @@ class DataBlobStream(val name: String, fileReferencesList: List<FileMetadata>) :
         super.close()
         currentFileRef?.inputStream?.close()
         closed = true
-    }
-}
-
-class DataBlobSubscription(
-    private val subscriber: Subscriber<in ByteBuffer>,
-    private val dataBlobStream: BufferedInputStream,
-    // single thread executor will return chunks in order
-    private val executor: ExecutorService = Executors.newSingleThreadExecutor(),
-    private var futureList: MutableList<Future<*>> = mutableListOf()
-) : org.reactivestreams.Subscription {
-    private var completed = false
-
-    @Synchronized
-    override fun request(n: Long) {
-        if (!completed) {
-            if (n <= 0) {
-                executor.execute { subscriber.onError(IllegalArgumentException()) }
-            } else {
-                futureList.add(
-                    executor.submit {
-                        val nextChunk = dataBlobStream.readBytes()
-                        subscriber.onNext(ByteBuffer.wrap(nextChunk))
-
-                        if (nextChunk.isEmpty()) {
-                            completed = true
-                            subscriber.onComplete()
-                        }
-                    }
-                )
-            }
-        }
-    }
-
-    @Synchronized
-    override fun cancel() {
-        completed = true
-        // cancel all requests and await
-        futureList.onEach { it.cancel(false) }.forEach { it.get() }
-        // close data stream
-        dataBlobStream.close()
     }
 }

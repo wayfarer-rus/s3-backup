@@ -40,7 +40,7 @@ internal object S3Client {
         bucketName: String,
         backupKey: String
     ): MetadataNode? {
-        logger.debug { "trying to load metadata $backupKey from bucket $bucketName" }
+        logger.info { "trying to load metadata $backupKey from bucket $bucketName" }
         val getObjectRequest = getObjectRequest(bucketName, "$backupKey.metadata").build()
         val backupMetadata = s3.getObject(getObjectRequest)
             ?.readAllBytes()
@@ -91,9 +91,8 @@ internal object S3Client {
             }
             u.requestBody(AsyncRequestBody.fromPublisher(dataBlobPublisher))
         }
-        blobUpload.printProgress(dataBlobPublisher.name)
         // we have to await while blob is completely uploaded to calculate offsets
-        blobUpload.completionFuture().join()
+        blobUpload.printProgress(dataBlobPublisher.name)
 
         val metadataUpload = transferManager.upload { u ->
             u.putObjectRequest { or ->
@@ -102,7 +101,6 @@ internal object S3Client {
             u.requestBody(AsyncRequestBody.fromString(Json.encodeToString(metadata)))
         }
         metadataUpload.printProgress(metadata.name)
-        metadataUpload.completionFuture().join()
     }
 
     private fun getObjectRequest(
