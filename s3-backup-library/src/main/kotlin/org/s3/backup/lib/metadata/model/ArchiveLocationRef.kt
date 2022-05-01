@@ -14,6 +14,8 @@ class ZipLfhLocation(
     var length: Long = 0
 ) {
     fun toRangeString(): String {
-        return "bytes=$offset-${offset + length}"
+        if (length == 0L) error("0-size file handling exception")
+        // bytes ranges are inclusive, therefore -1
+        return "bytes=$offset-${offset + length - 1}"
     }
 }

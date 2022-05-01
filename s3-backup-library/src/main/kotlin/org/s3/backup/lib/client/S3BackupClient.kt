@@ -86,9 +86,9 @@ class S3BackupClient {
             rangeForBackup
         )
 
-        logger.debug { "closing all opened streams..." }
+        logger.info { "closing all opened streams..." }
         dataStreamsByBackupMap.forEach { (_, stream) -> stream.close() }
-        logger.debug { "restoration complete" }
+        logger.info { "restoration complete" }
     }
 
     private fun flushToDisk(
@@ -104,13 +104,13 @@ class S3BackupClient {
         val extractedFilesMap: MutableMap<String, File> = mutableMapOf()
 
         fileNodesGroupedByBackup.forEach { (backupKey, fileNodes) ->
-            logger.debug { "reading data from $backupKey backup..." }
+            logger.info { "reading data from $backupKey backup..." }
             var currentOffset = 0L
 
             fileNodes.forEach { fileNode ->
                 // create file object pointing to specified location
                 val f = File(destinationDirectory + fileNode.path)
-                logger.debug { "extracting file ${f.name} to path: ${f.path}" }
+                logger.info { "extracting file ${f.name} to path: ${f.path}" }
                 // make directories
                 f.parentFile.mkdirs()
 
