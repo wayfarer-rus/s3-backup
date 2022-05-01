@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
+import org.s3.backup.lib.client.S3Client
 import org.s3.backup.lib.metadata.model.FileMetadata
 import org.s3.backup.lib.metadata.model.MetadataNode
 import org.s3.backup.lib.utilities.BackupUtility
@@ -60,6 +61,17 @@ internal class BackupUtilityTest {
         val testDir = getResourcePath("test-origin")!!
         val metadata = BackupUtility.collectMetadata(File(testDir))
         println(metadata)
+    }
+
+    @Test
+    @Disabled
+    fun `test range downloads from bucket`() {
+        val stream = S3Client.bufferedInputStreamFromFileWithRange(
+            bucketName = "andrei.test",
+            "1651409557579",
+            "bytes=0-0,-1" // first and last bytes
+        )
+        println()
     }
 }
 

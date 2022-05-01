@@ -54,6 +54,9 @@ internal object S3Client {
         return backupMetadata
     }
 
+    // note range downloads are limited with 1 range
+    // you can't download multiple ranges with 1 request
+    // complete object will be returned instead
     fun bufferedInputStreamFromFileWithRange(
         bucketName: String,
         fileName: String,
@@ -93,7 +96,7 @@ internal object S3Client {
             u.requestBody(AsyncRequestBody.fromPublisher(dataBlobPublisher))
         }
         // we have to await while blob is completely uploaded to calculate offsets
-        blobUpload.printProgress(dataBlobPublisher.name)
+        blobUpload.printProgress(dataBlobPublisher.name, dataBlobPublisher.estimatedContentLength)
 
         val metadataUpload = transferManager.upload { u ->
             u.putObjectRequest { or ->
@@ -130,10 +133,10 @@ internal object S3Client {
 }
 
 val fuLogger = KotlinLogging.logger("FileUpload")
-private fun ObjectTransfer.printProgress(keyName: String) {
+private fun ObjectTransfer.printProgress(keyName: String, estimatedSize: Long? = null) {
     while (!this.completionFuture().isDone) {
         val transferred = this.progress().snapshot().bytesTransferred()
-        val size: Long = this.progress().snapshot().transferSizeInBytes().orElse(0)
+        val size: Long = estimatedSize ?: this.progress().snapshot().transferSizeInBytes().orElse(0)
 
         fuLogger.info { "$keyName: $transferred/$size" }
 
