@@ -20,7 +20,7 @@ class DoBackupRequest(
             }
 
             if (!FileValidators.isValidInputDir(directoryToBackup)) {
-                throw IllegalArgumentException("Given directory $directoryToBackup is either not a directory or not accessible")
+                invalidDirectoryToBackupError(directoryToBackup)
             }
 
             return DoBackupRequest(
@@ -28,6 +28,12 @@ class DoBackupRequest(
                 directoryToBackup = directoryToBackup,
                 dryRun
             )
+        }
+    }
+
+    companion object {
+        fun invalidDirectoryToBackupError(directoryToBackup: String) {
+            throw IllegalArgumentException("Given directory $directoryToBackup is either not a directory or not accessible")
         }
     }
 }

@@ -20,4 +20,6 @@ class DirMetadata(
         File("$pathDest/$path").mkdirs()
         children.forEach { it.writeToDisk(pathDest) }
     }
+
+    override fun flatten() = listOf(this) + children.flatMap { it.flatten() }
 }

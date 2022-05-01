@@ -8,4 +8,5 @@ sealed class MetadataNode {
     abstract fun filesList(): List<FileMetadata>
     abstract fun pathList(): List<String>
     abstract fun writeToDisk(pathDest: String)
+    abstract fun flatten(): List<MetadataNode>
 }

@@ -13,7 +13,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.concurrent.Future
 
-class DataBlobPublisher(val name: String, val fileReferencesList: List<FileMetadata>) : Publisher<ByteBuffer> {
+internal class DataBlobPublisher(val name: String, val fileReferencesList: List<FileMetadata>) : Publisher<ByteBuffer> {
     private val bufferSize = BYTE_BUFFER_SIZE
     private val dataBlobStream = BufferedInputStream(DataBlobStream(name, fileReferencesList), bufferSize)
     val estimatedContentLength = fileReferencesList.sumOf { it.size }
@@ -23,7 +23,7 @@ class DataBlobPublisher(val name: String, val fileReferencesList: List<FileMetad
     }
 }
 
-class DataBlobSubscription(
+internal class DataBlobSubscription(
     private val subscriber: Subscriber<in ByteBuffer>,
     private val dataBlobStream: BufferedInputStream,
 ) : org.reactivestreams.Subscription {
@@ -63,7 +63,7 @@ class DataBlobSubscription(
     }
 }
 
-class DataBlobStream(val name: String, fileReferencesList: List<FileMetadata>) : InputStream() {
+internal class DataBlobStream(val name: String, fileReferencesList: List<FileMetadata>) : InputStream() {
     private var closed = false
     private var offset = 0L
     private var cursor = 0L

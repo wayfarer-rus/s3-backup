@@ -10,6 +10,7 @@ import org.s3.backup.lib.validators.BackupValidators
 import software.amazon.awssdk.core.async.AsyncRequestBody
 import software.amazon.awssdk.services.s3.model.GetObjectRequest
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request
+import software.amazon.awssdk.services.s3.model.ObjectIdentifier
 import software.amazon.awssdk.transfer.s3.ObjectTransfer
 import software.amazon.awssdk.transfer.s3.S3TransferManager
 
@@ -109,6 +110,23 @@ internal object S3Client {
     ): GetObjectRequest.Builder = GetObjectRequest.builder()
         .bucket(bucketName)
         .key(backupKey)
+
+    fun deleteBackup(bucketName: String, backupKey: String): Boolean {
+        val listObjectsRequest = ListObjectsV2Request
+            .builder()
+            .bucket(bucketName)
+            .build()
+
+        val objects = s3.listObjectsV2Paginator(listObjectsRequest)
+            .contents()
+            .filter { it.key() == backupKey || it.key().startsWith(backupKey) }
+
+        return s3.deleteObjects { req ->
+            req.bucket(bucketName).delete { deleteBuilder ->
+                deleteBuilder.objects(objects.map { ObjectIdentifier.builder().key(it.key()).build() })
+            }
+        }.hasDeleted()
+    }
 }
 
 val fuLogger = KotlinLogging.logger("FileUpload")

@@ -14,7 +14,7 @@ class RestoreFromBackupRequest(
 
         fun build(): RestoreFromBackupRequest {
             if (!FileValidators.isValidOutputDir(destinationDirectory)) {
-                throw IllegalArgumentException("Can't write output to '$destinationDirectory'")
+                invalidDestinationDirectoryError(destinationDirectory)
             }
 
             return RestoreFromBackupRequest(
@@ -25,6 +25,12 @@ class RestoreFromBackupRequest(
 
         fun backupContext(init: BackupContext.Builder.() -> Unit) {
             this.backupContext = BackupContext.Builder().apply(init).build()
+        }
+    }
+
+    companion object {
+        fun invalidDestinationDirectoryError(destinationDirectory: String) {
+            throw IllegalArgumentException("Can't write output to '$destinationDirectory'")
         }
     }
 }

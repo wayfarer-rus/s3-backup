@@ -36,4 +36,6 @@ class FileMetadata(
             }
         }
     }
+
+    override fun flatten() = listOf(this)
 }

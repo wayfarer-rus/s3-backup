@@ -15,9 +15,13 @@ private val logger = KotlinLogging.logger {}
 internal object BackupUtility {
     // the main idea is that we have to create some kind of metadata
     // that will allow us to handle delta-backups
-    fun doBackup(directory: File, bucketName: String, dryRun: Boolean = false) {
-        val currentTimestamp = "${System.currentTimeMillis()}"
-        val metadataFileName = "$currentTimestamp.metadata"
+    fun doBackup(
+        directory: File,
+        bucketName: String,
+        dryRun: Boolean = false,
+        key: String = "${System.currentTimeMillis()}"
+    ): MetadataNode {
+        val metadataFileName = "$key.metadata"
 
         logger.info { "access bucket and download latest metadata file..." }
         val latestBackupMetadata: MetadataNode? = downloadLatestMetadata(bucketName)
@@ -31,15 +35,14 @@ internal object BackupUtility {
 
             // if there are no mew checksums - exit with "nothing to do message"
             if (newOrUpdatedFiles.isEmpty()) {
-                logger.info { "nothing to do; no updates" }
-                return
+                error { "nothing to do; no updates" }
             }
 
             // 4) for new files create stream
-            DataBlobPublisher(name = currentTimestamp, newOrUpdatedFiles)
+            DataBlobPublisher(name = key, newOrUpdatedFiles)
         } else if (latestBackupMetadata == null) {
             // completely new backup
-            DataBlobPublisher(name = currentTimestamp, freshMetadata.filesList())
+            DataBlobPublisher(name = key, freshMetadata.filesList())
         } else {
             error("Backup of different directories are not supported. Current backup directory is ${latestBackupMetadata.name}")
         }
@@ -61,6 +64,7 @@ internal object BackupUtility {
         }
 
         logger.info { "done" }
+        return freshMetadata
     }
 
     private fun updateOldFilesAndFindNewFiles(
@@ -162,11 +166,4 @@ internal object BackupUtility {
             return latestPop
         }
     }
-
-    fun bufferedInputStreamFromFileNode(bucketName: String, fileNode: FileMetadata) =
-        S3Client.bufferedInputStreamFromFileWithRange(
-            bucketName,
-            fileNode.archiveLocationRef.archiveName,
-            fileNode.archiveLocationRef.toRangeString()
-        )
 }
