@@ -17,7 +17,22 @@ import java.nio.file.Path
 
 private val logger = KotlinLogging.logger {}
 
+/**
+ * "Classic" style API
+ */
 class S3Backup(val bucketName: String) {
+    init {
+        if (!S3BucketValidators.isValidName(bucketName))
+            BackupContext.invalidBucketNameError(bucketName)
+    }
+
+    /**
+     * Uploads directory path content to the S3
+     *
+     * @param directoryPath
+     *        path to the directory that will be uploaded
+     * @return S3BackupMetadata object with backup metadata and key
+     */
     fun upload(directoryPath: Path): S3BackupMetadata {
         val directoryToBackup = directoryPath.toAbsolutePath().normalize().toString()
 
@@ -35,6 +50,13 @@ class S3Backup(val bucketName: String) {
         return S3BackupMetadata(key, metadataNode)
     }
 
+    /**
+     * Will return backup metadata object from bucket.
+     *
+     * @param key
+     *        backup key
+     * @return S3BackupMetadata object with metadata adn key
+     */
     fun getMetadata(key: String) = S3BackupMetadata(key, getMetadataNode(key))
 
     private fun getMetadataNode(key: String): MetadataNode {
@@ -46,16 +68,36 @@ class S3Backup(val bucketName: String) {
         }
     }
 
+    /**
+     * List backups in bucket.
+     *
+     * @return list of all backup keys
+     */
     fun list(): List<String> {
         return S3Client.collectMetadataEntriesFromBucket(bucketName)
     }
 
+    /**
+     * Get file data from S3 as an inputStream.
+     *
+     * @param fileNode
+     *        FileMetadata object from backup metadata
+     * @return InputStream with file content
+     */
     fun fileNodeInputStream(fileNode: FileMetadata) =
         RestoreUtility.inputStreamForFileNode(
             bucketName,
             fileNode
         )
 
+    /**
+     * Restore backup to given directory.
+     *
+     * @param fromKey
+     *        backup key
+     * @param toDirectory
+     *        path to the directory
+     */
     fun restore(fromKey: String, toDirectory: Path) {
         val destinationDirectory = toDirectory.toAbsolutePath().normalize().toString()
 
@@ -70,12 +112,14 @@ class S3Backup(val bucketName: String) {
         )
     }
 
+    /**
+     * Delete backup from S3
+     *
+     * @param key
+     *        backup key
+     * @return true if backup was deleted, false otherwise
+     */
     fun deleteBackup(key: String) = S3Client.deleteBackup(bucketName, key)
-
-    init {
-        if (!S3BucketValidators.isValidName(bucketName))
-            BackupContext.invalidBucketNameError(bucketName)
-    }
 }
 
 class S3BackupMetadata(
